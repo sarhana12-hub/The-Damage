@@ -1686,7 +1686,7 @@
         ICONS.users + ' Group text to ' + groupTo.length + ' people</a>';
       out += '<p class="helper" style="margin-top:10px;font-size:13px;">Opens one message to everyone who owes' +
         (payerTag ? ', with ' + esc(payerTag) + ' as the text' : '') +
-        ', and puts a card on the clipboard listing what each of them owes — totals only, so nobody sees what anybody ate.' +
+        ', and puts a card on the clipboard showing what each of them owes and the items behind it.' +
         (noNumber.length ? ' ' + noNumber.map(function(p){ return esc(p.name); }).join(' and ') + ' ' +
           (noNumber.length === 1 ? 'has' : 'have') + ' no number saved, so ' +
           (noNumber.length === 1 ? 'they are' : 'they are') + ' left out.' : '') + '</p>';
@@ -2203,9 +2203,10 @@
     return c.toDataURL('image/png');
   }
 
-  // The card for a group chat: who owes what, and nothing about what anyone
-  // ate. Totals only keeps it short enough to read without opening, and keeps
-  // everyone's order to themselves.
+  // The card for a group chat: everyone who owes, with the items behind each
+  // total so nobody has to ask why their number is what it is. The person who
+  // paid is not listed — the card is the debt, and the header already says
+  // whose it is.
   function groupCardDataUrl(d, split){
     var payer = (d.people || []).filter(function(x){ return x.id === d.payerId; })[0];
     var tag = handleFor(payer);
@@ -2215,8 +2216,13 @@
     if (!owing.length) return null;
     var owedBack = owing.reduce(function(a, p){ return a + p.total; }, 0);
 
-    var rowsTop = PAD + 92 + 52;
-    var footTop = rowsTop + owing.length * 78 + 24;
+    // Measure first: a header per person, then a line for each of their items.
+    var detailOf = function(p){
+      return p.lines.length + (p.tax ? 1 : 0) + (p.tip ? 1 : 0) + (p.adj ? 1 : 0);
+    };
+    var rowsTop = PAD + 92 + 52, tops = [], y = rowsTop;
+    owing.forEach(function(p){ tops.push(y); y += 74 + detailOf(p) * 36 + 28; });
+    var footTop = y + 6;
     var H = footTop + 62 + (payer ? 70 : 0) + 74;
 
     var c = document.createElement('canvas');
@@ -2234,7 +2240,7 @@
       (payer ? '  ·  ' + payer.name + ' paid' : ''), PAD, PAD + 90);
 
     owing.forEach(function(p, i){
-      var top = rowsTop + i * 78;
+      var top = tops[i];
       ctx.fillStyle = p.color;
       ctx.beginPath();
       ctx.arc(PAD + 28, top + 26, 28, 0, Math.PI * 2);
@@ -2253,11 +2259,32 @@
       ctx.fillText(fmtMoney(p.total), IMG_W - PAD, top + 36);
       ctx.textAlign = 'left';
 
+      var ly = top + 74;
+      ctx.fillStyle = '#786959';
+      function detail(label, amount){
+        ctx.font = F.item;
+        ctx.fillText(label, PAD + 76, ly);
+        ctx.font = F.cash;
+        ctx.textAlign = 'right';
+        ctx.fillText(amount, IMG_W - PAD, ly);
+        ctx.textAlign = 'left';
+        ly += 36;
+      }
+      p.lines.forEach(function(l){
+        var note = l.split > 1 ? ' (' + (l.orphan ? 'shared' : '1/' + l.split) + ' of ' + fmtMoney(l.full) + ')' : '';
+        var label = (l.qty > 1 ? l.qty + '× ' : '') + l.name + note;
+        if (label.length > 44) label = label.slice(0, 43) + '…';
+        detail(label, fmtMoney(l.cents));
+      });
+      if (p.tax) detail('Tax', fmtMoney(p.tax));
+      if (p.tip) detail('Tip', fmtMoney(p.tip));
+      if (p.adj) detail('Share of the rest', fmtMoney(p.adj));
+
       ctx.strokeStyle = '#2A2119';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(PAD, top + 62);
-      ctx.lineTo(IMG_W - PAD, top + 62);
+      ctx.moveTo(PAD, ly - 2);
+      ctx.lineTo(IMG_W - PAD, ly - 2);
       ctx.stroke();
     });
 
