@@ -1297,6 +1297,15 @@
       out += '<div class="warn">' + esc(state.ui.scanError) + '</div>';
     }
 
+    // Coming back here with work already done should never feel like losing
+    // it. Say plainly what is held, and make going on again one tap — reading
+    // a new receipt replaces those items, so it should be a deliberate act.
+    if (d && d.items.length){
+      out += '<div class="note"><b>' + d.items.length + ' item' + (d.items.length === 1 ? '' : 's') +
+        '</b> already read' + (d.place ? ' from ' + esc(d.place) : '') + ', and kept. Nothing below has been lost.' +
+        '<button class="btn btn-primary btn-block btn-sm" style="margin-top:12px" data-action="to-items">Back to the items &rarr;</button></div>';
+    }
+
     var hasKey = !!(state.settings.geminiKey || '').trim();
     // The camera input opens the camera directly; the second one, without
     // `capture`, reaches the photo library so a screenshot of a digital
@@ -1605,8 +1614,12 @@
           '<div class="grow"><div class="nm">' + esc(p.name) + (isPayer ? ' <span class="payer-tag">paid</span>' : '') + '</div>' +
           '<div class="sm">' + esc(sub) + '</div></div>' +
           '<div class="amt money">' + fmtMoney(amount) + '</div>' +
-          // Their own card, with nobody else's share on it.
-          '<button class="send-btn alt pic" data-action="share-image" data-id="' + p.id + '" aria-label="Send ' + esc(p.name) + ' a picture of their share">' + ICONS.image + '</button>' +
+          // Their own card, with nobody else's share on it. With a number on
+          // file this opens Messages addressed to them and puts the picture on
+          // the clipboard; without one it can only offer the share sheet.
+          (phone
+            ? '<a class="send-btn alt pic" href="' + esc(smsHref(phone, msg)) + '" data-action="pic-then-text" data-id="' + p.id + '" aria-label="Text ' + esc(p.name) + ' with their picture on the clipboard">' + ICONS.image + '</a>'
+            : '<button class="send-btn alt pic" data-action="share-image" data-id="' + p.id + '" aria-label="Send ' + esc(p.name) + ' a picture of their share">' + ICONS.image + '</button>') +
           (phone
             ? '<a class="send-btn' + (isPayer ? ' alt' : '') + '" href="' + esc(smsHref(phone, msg)) + '">' + ICONS.send + ' Text</a>'
             : '<button class="send-btn alt" data-action="copy-message" data-id="' + p.id + '">' + ICONS.copy + ' Copy</button>') +
@@ -1967,6 +1980,18 @@
     if (res.total != null) d.total = res.total;
     d.parsedSubtotal = res.subtotal;
 
+    // Keep a readable transcript of what the photo said. Without this, going
+    // back to the receipt screen shows an empty box and it looks as though the
+    // scan was thrown away — and it is genuinely useful to re-read later.
+    var transcript = res.items.map(function(it){
+      return (it.qty > 1 ? it.qty + ' ' : '') + it.name + '  ' + fmtPlain(it.cents);
+    });
+    if (res.subtotal != null) transcript.push('Subtotal  ' + fmtPlain(res.subtotal));
+    if (res.tax != null) transcript.push('Tax  ' + fmtPlain(res.tax));
+    if (res.tip != null) transcript.push('Tip  ' + fmtPlain(res.tip));
+    if (res.total != null) transcript.push('Total  ' + fmtPlain(res.total));
+    d.rawText = transcript.join('\n');
+
     var n = res.items.length;
     d.parseNote = n
       ? 'Read ' + n + ' item' + (n === 1 ? '' : 's') + ' from the photo. Check the prices against the paper before you go on — a misread digit is the one thing that quietly breaks a split.'
@@ -2124,6 +2149,37 @@
     return new File([arr], name, { type: 'image/png' });
   }
 
+  // There is no way to open a message to a chosen person with an image already
+  // attached: sms: addresses a recipient but carries only text, and the Web
+  // Share API carries files but has no recipient field by design. So when a
+  // number is on file we do the next best thing — put the picture on the
+  // clipboard and let the sms: link open Messages already addressed, with the
+  // text in place and the image one paste away. The clipboard write is started
+  // inside the click and the link's own navigation is left to proceed, because
+  // navigating first would tear down the write.
+  function copyImageThenText(personId){
+    var d = D();
+    var dataUrl = personImageDataUrl(d, computeSplit(d), personId);
+    if (!dataUrl) return;
+    if (!(navigator.clipboard && window.ClipboardItem)){
+      showToast('Opening a text — tap the picture button for the image');
+      return;
+    }
+    try{
+      // ClipboardItem accepts a promise for the blob, which keeps the whole
+      // thing inside the gesture that Safari requires.
+      navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': fetch(dataUrl).then(function(r){ return r.blob(); }) })
+      ]).then(function(){
+        showToast('Picture copied — paste it into the message');
+      }, function(){
+        showToast('Could not copy the picture — the text is still ready');
+      });
+    }catch(e){
+      showToast('Could not copy the picture — the text is still ready');
+    }
+  }
+
   function shareSplitImage(personId){
     var d = D();
     var split = computeSplit(d);
@@ -2241,6 +2297,7 @@
         break;
       }
 
+      case 'to-items': go('items'); break;
       case 'to-people': go('people'); break;
       case 'toggle-person': toggleRosterPerson(id); break;
       case 'sheet-add-person':
@@ -2334,6 +2391,7 @@
       }
       case 'share-link': shareResult(); break;
       case 'share-image': shareSplitImage(id); break;
+      case 'pic-then-text': copyImageThenText(id); break;   // no preventDefault: the link still opens Messages
 
       case 'leave-shared':
         sharedView = null;
