@@ -1003,6 +1003,10 @@
     if (key.trim()){
       out += '<div class="tiechip ok" style="margin-top:12px;">' + ICONS.check + '<span>Key saved' +
         (state.settings.geminiModel ? ' — last read by ' + esc(state.settings.geminiModel) : '') + '. Scanning is on.</span></div>';
+      // Settings would otherwise be a dead end: the next thing anyone wants
+      // after saving the key is to point the camera at something.
+      out += '<button class="btn btn-primary btn-block" style="margin-top:12px" data-action="start-new">' +
+        ICONS.camera + ' Scan a receipt now</button>';
     }
     out += '</div>';
     out += '<p class="helper">Get a free key at <b>aistudio.google.com/apikey</b> — no card needed. It is stored only on this phone, never in the app&rsquo;s code and never in a shared link. ' +
