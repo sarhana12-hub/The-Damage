@@ -1634,6 +1634,12 @@
         // The person who paid is owed, not owing, so they get the other half
         // of the conversation.
         var msg = (isPayer && yours) ? payerMessage(d, yours) : oweMessage(d, p);
+        // The picture already says what they owe and for what, so the message
+        // it travels with is stripped to the one thing worth having as text:
+        // the handle, sitting alone so it is easy to long-press and copy.
+        var picMsg = (isPayer && yours)
+          ? payerMessage(d, yours)
+          : (payerTag || (payerP ? 'Settle up with ' + payerP.name : ''));
         var amount = (isPayer && yours) ? yours.total : p.total;
         var sub = isPayer && yours ? 'you owe them' : (phone ? prettyPhone(phone) : 'No number saved');
         return '<div class="send-row">' + avatar(p) +
@@ -1644,14 +1650,16 @@
           // file this opens Messages addressed to them and puts the picture on
           // the clipboard; without one it can only offer the share sheet.
           (phone
-            ? '<a class="send-btn alt pic" href="' + esc(smsHref(phone, msg)) + '" data-action="pic-then-text" data-id="' + p.id + '" aria-label="Text ' + esc(p.name) + ' with their picture on the clipboard">' + ICONS.image + '</a>'
+            ? '<a class="send-btn alt pic" href="' + esc(smsHref(phone, picMsg)) + '" data-action="pic-then-text" data-id="' + p.id + '" aria-label="Text ' + esc(p.name) + ' with their picture on the clipboard">' + ICONS.image + '</a>'
             : '<button class="send-btn alt pic" data-action="share-image" data-id="' + p.id + '" aria-label="Send ' + esc(p.name) + ' a picture of their share">' + ICONS.image + '</button>') +
           (phone
             ? '<a class="send-btn' + (isPayer ? ' alt' : '') + '" href="' + esc(smsHref(phone, msg)) + '">' + ICONS.send + ' Text</a>'
             : '<button class="send-btn alt" data-action="copy-message" data-id="' + p.id + '">' + ICONS.copy + ' Copy</button>') +
           '</div>';
       }).join('') + '</div>';
-      out += '<p class="helper" style="margin-top:10px;font-size:13px;">Send as many or as few as you like — each one is separate. The picture button makes a card for that person alone. The message lists that person&rsquo;s own items and their share of tax and tip' +
+      out += '<p class="helper" style="margin-top:10px;font-size:13px;">Send as many or as few as you like — each one is separate. ' +
+        '<b>Text</b> writes out their items in full. <b>The picture button</b> opens the same message with their card on the clipboard to paste, and sends just the handle as text so it is easy to copy — the card carries the detail. ' +
+        'The written message lists that person&rsquo;s own items and their share of tax and tip' +
         (payerTag ? ', and ends with ' + esc(payerTag) : '') +
         ', so there is nothing to open and no link to wade through. ' +
         'Numbers and handles are saved against a name in <button class="link-btn" style="padding:0" data-action="go" data-view="roster">who you dine with</button>.</p>';
