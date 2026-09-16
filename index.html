@@ -1596,7 +1596,9 @@
         'Numbers and handles are saved against a name in <button class="link-btn" style="padding:0" data-action="go" data-view="roster">who you dine with</button>.</p>';
     }
 
-    out += '<h2 class="sec">Or send one link to the group</h2>';
+    out += '<h2 class="sec">Or send the whole table at once</h2>';
+    out += '<button class="btn btn-secondary btn-block" data-action="share-image">' + ICONS.image + ' Send it as a picture</button>';
+    out += '<p class="helper" style="margin-top:10px;font-size:13px;">A receipt card with everyone on it — the thing to drop into a group chat. Nothing to tap and nothing to install.</p>';
     var url = encodeShare(d);
     out += '<button class="link-copy" data-action="copy-link"><span>' + esc(url.replace(/^https?:\/\//, '')) + '</span>' + ICONS.link + '</button>';
     out += '<p class="helper" style="margin-top:10px;font-size:13px;">The whole breakdown is packed into that link. Anyone can open it — no app, no account, nothing stored anywhere. Neither your Venmo handle nor anyone&rsquo;s phone number is in it, so a link that gets forwarded on gives away nothing but the dinner.</p>';
@@ -1974,6 +1976,189 @@
     render();
   }
 
+  /* ---------------- the split as a picture ----------------
+     For posting into a group chat, where there is no single recipient to
+     address and a link is just a blue smear. Per-person messages stay as
+     text: an sms: link can only carry text, so an image would cost the
+     pre-addressed one-tap send, and nobody can copy a Venmo handle out of a
+     picture. */
+
+  var IMG_W = 1080, PAD = 56;
+  var F = {
+    title: '700 46px "Helvetica Neue", Helvetica, Arial, sans-serif',
+    sub:   '400 28px "Helvetica Neue", Helvetica, Arial, sans-serif',
+    name:  '600 36px "Helvetica Neue", Helvetica, Arial, sans-serif',
+    small: '400 25px "Helvetica Neue", Helvetica, Arial, sans-serif',
+    item:  '400 26px "Helvetica Neue", Helvetica, Arial, sans-serif',
+    money: '600 36px SFMono-Regular, "SF Mono", Menlo, monospace',
+    cash:  '500 26px SFMono-Regular, "SF Mono", Menlo, monospace',
+    big:   '700 42px SFMono-Regular, "SF Mono", Menlo, monospace',
+    mark:  '700 26px "Helvetica Neue", Helvetica, Arial, sans-serif'
+  };
+  function roundRect(ctx, x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // Built in one synchronous pass so it can be handed to navigator.share
+  // inside the click that asked for it — iOS will not share from a callback
+  // that lands after the gesture has expired.
+  function splitImageDataUrl(d, split){
+    var ranked = split.people.slice().sort(function(a, b){ return b.total - a.total; });
+    var payer = (d.people || []).filter(function(x){ return x.id === d.payerId; })[0];
+    var tag = handleFor(payer);
+
+    // Measure first: each person costs a header plus a line per item.
+    var rowTops = [], y = PAD + 72 + 46;
+    ranked.forEach(function(p){
+      rowTops.push(y);
+      y += 92 + (p.lines.length + (p.tax ? 1 : 0) + (p.tip ? 1 : 0) + (p.adj ? 1 : 0)) * 38 + 26;
+    });
+    var summaryTop = y + 14;
+    var H = summaryTop + 40 + 4 * 46 + 40 + (tag ? 56 : 0) + 74;
+
+    var c = document.createElement('canvas');
+    c.width = IMG_W; c.height = Math.round(H);
+    var ctx = c.getContext('2d');
+
+    ctx.fillStyle = '#17120F';
+    ctx.fillRect(0, 0, c.width, c.height);
+
+    ctx.fillStyle = '#F6EDE0';
+    ctx.font = F.title;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(d.place || 'The damage', PAD, PAD + 46);
+    ctx.fillStyle = '#A5947F';
+    ctx.font = F.sub;
+    ctx.fillText((d.date ? fmtDate(d.date) + '  ·  ' : '') + fmtMoney(split.total) +
+      (payer ? '  ·  ' + payer.name + ' paid' : ''), PAD, PAD + 90);
+
+    ranked.forEach(function(p, i){
+      var top = rowTops[i];
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(PAD + 32, top + 30, 32, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1A1109';
+      ctx.font = '700 24px "Helvetica Neue", Helvetica, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(initials(p.name), PAD + 32, top + 39);
+      ctx.textAlign = 'left';
+
+      ctx.fillStyle = '#F6EDE0';
+      ctx.font = F.name;
+      ctx.fillText(p.name, PAD + 84, top + 40);
+      // Without this the person who covered the whole bill just looks like
+      // another debtor, which is the opposite of the truth.
+      if (payer && p.id === payer.id){
+        var bx = PAD + 96 + ctx.measureText(p.name).width, by = top + 10, bw = 80, bh = 34;
+        ctx.fillStyle = 'rgba(224,164,88,.18)';
+        roundRect(ctx, bx, by, bw, bh, 9);
+        ctx.fill();
+        ctx.fillStyle = '#E0A458';
+        ctx.font = '700 20px "Helvetica Neue", Helvetica, Arial, sans-serif';
+        ctx.fillText('PAID', bx + 15, by + 24);
+      }
+      // Reset: the badge above changes the fill, and every amount should read
+      // the same regardless of who happened to pay.
+      ctx.fillStyle = '#F6EDE0';
+      ctx.font = F.money;
+      ctx.textAlign = 'right';
+      ctx.fillText(fmtMoney(p.total), IMG_W - PAD, top + 40);
+      ctx.textAlign = 'left';
+
+      var ly = top + 86;
+      ctx.fillStyle = '#786959';
+      function detail(label, amount){
+        ctx.font = F.item;
+        ctx.fillText(label, PAD + 84, ly);
+        ctx.font = F.cash;
+        ctx.textAlign = 'right';
+        ctx.fillText(amount, IMG_W - PAD, ly);
+        ctx.textAlign = 'left';
+        ly += 38;
+      }
+      p.lines.forEach(function(l){
+        var note = l.split > 1 ? ' (' + (l.orphan ? 'shared' : '1/' + l.split) + ')' : '';
+        var label = (l.qty > 1 ? l.qty + '× ' : '') + l.name + note;
+        if (label.length > 42) label = label.slice(0, 41) + '…';
+        detail(label, fmtMoney(l.cents));
+      });
+      if (p.tax) detail('Tax', fmtMoney(p.tax));
+      if (p.tip) detail('Tip', fmtMoney(p.tip));
+      if (p.adj) detail('Share of the rest', fmtMoney(p.adj));
+
+      ctx.strokeStyle = '#2A2119';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(PAD, ly - 4);
+      ctx.lineTo(IMG_W - PAD, ly - 4);
+      ctx.stroke();
+    });
+
+    var sy = summaryTop + 40;
+    function totalRow(label, amount, strong){
+      ctx.fillStyle = strong ? '#F6EDE0' : '#A5947F';
+      ctx.font = strong ? F.name : F.item;
+      ctx.fillText(label, PAD, sy);
+      ctx.font = strong ? F.big : F.cash;
+      ctx.textAlign = 'right';
+      ctx.fillText(amount, IMG_W - PAD, sy);
+      ctx.textAlign = 'left';
+      sy += 46;
+    }
+    totalRow('Items', fmtMoney(split.itemsSum));
+    totalRow('Tax', fmtMoney(split.tax));
+    totalRow('Tip', fmtMoney(split.tip));
+    sy += 8;
+    totalRow('Total', fmtMoney(split.total), true);
+
+    if (tag){
+      ctx.fillStyle = '#E0A458';
+      ctx.font = F.name;
+      ctx.fillText('Venmo ' + tag, PAD, sy + 18);
+      sy += 56;
+    }
+
+    ctx.fillStyle = '#6A5A48';
+    ctx.font = F.mark;
+    ctx.fillText('The Damage', PAD, c.height - 30);
+
+    return c.toDataURL('image/png');
+  }
+
+  function dataUrlToFile(dataUrl, name){
+    var bin = atob(dataUrl.split(',')[1]);
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new File([arr], name, { type: 'image/png' });
+  }
+
+  function shareSplitImage(){
+    var d = D();
+    var dataUrl = splitImageDataUrl(d, computeSplit(d));
+    var name = ((d.place || 'the-damage').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'the-damage') + '.png';
+    var file = dataUrlToFile(dataUrl, name);
+    if (navigator.canShare && navigator.canShare({ files: [file] })){
+      navigator.share({ files: [file] }).catch(function(){});
+      return;
+    }
+    // No file sharing here: put it on the clipboard, and failing that open it
+    // so it can be saved by hand.
+    if (navigator.clipboard && window.ClipboardItem){
+      fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(b){
+        return navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]);
+      }).then(function(){ showToast('Image copied'); }, function(){ window.open(dataUrl, '_blank'); });
+      return;
+    }
+    window.open(dataUrl, '_blank');
+  }
+
   function shareResult(){
     var url = encodeShare(D());
     var title = (D().place ? D().place + ' — ' : '') + 'the damage';
@@ -2151,6 +2336,7 @@
         break;
       }
       case 'share-link': shareResult(); break;
+      case 'share-image': shareSplitImage(); break;
 
       case 'leave-shared':
         sharedView = null;
