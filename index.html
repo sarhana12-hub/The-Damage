@@ -386,8 +386,11 @@
 
   /* ---------------- state ---------------- */
   function defaultUi(){ return { view:'home', sheet:null, open:{}, editing:false }; }
-  function defaultSettings(){ return { venmo: '', geminiKey: '', geminiModel: '' }; }
-  function defaultState(){ return { roster: [], dinner: null, settings: defaultSettings(), ui: defaultUi() }; }
+  function defaultSettings(){ return { venmo: '', meId: null, geminiKey: '', geminiModel: '' }; }
+  // `dinner` is the one being worked on; `dinners` are the finished ones,
+  // newest first. Nothing is ever destroyed to make room for a new split.
+  function defaultState(){ return { roster: [], dinner: null, dinners: [], settings: defaultSettings(), ui: defaultUi() }; }
+  var KEEP_SPLITS = 60;
 
   function load(){
     try{
@@ -398,6 +401,7 @@
           if (!parsed.ui) parsed.ui = defaultUi();
           if (!parsed.ui.open) parsed.ui.open = {};
           if (!parsed.settings) parsed.settings = defaultSettings();
+          if (!Array.isArray(parsed.dinners)) parsed.dinners = [];
           // An open sheet is a moment, not a place. Coming back to the app
           // should never restore a half-finished dialog over the top — and
           // the same goes for a spinner or an error from a scan that is over.
@@ -417,7 +421,7 @@
 
   function save(){
     try{
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ roster: state.roster, dinner: state.dinner, settings: state.settings, ui: state.ui }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ roster: state.roster, dinner: state.dinner, dinners: state.dinners, settings: state.settings, ui: state.ui }));
     }catch(e){}
   }
 
@@ -436,7 +440,7 @@
     if (!clean) return null;
     var existing = state.roster.filter(function(p){ return p.name.toLowerCase() === clean.toLowerCase(); })[0];
     if (existing) return existing;
-    var person = { id: uid(), name: clean, color: nextColor(), phone: '' };
+    var person = { id: uid(), name: clean, color: nextColor(), phone: '', venmo: '' };
     state.roster.push(person);
     return person;
   }
@@ -451,6 +455,17 @@
     var v = String((state.settings && state.settings.venmo) || '').trim().replace(/^@+/, '');
     return v ? '@' + v : '';
   }
+  // Whose handle to quote depends on who is owed, which is not always you.
+  // Your own handle lives in Settings; everyone else's sits on their roster
+  // entry, so a dinner someone else paid for can still say where to send it.
+  function handleFor(p){
+    if (!p) return '';
+    var mine = state.settings.meId && p.id === state.settings.meId;
+    var raw = mine ? (state.settings.venmo || p.venmo) : p.venmo;
+    raw = String(raw || '').trim().replace(/^@+/, '');
+    return raw ? '@' + raw : '';
+  }
+  function isMe(p){ return !!(p && state.settings.meId && p.id === state.settings.meId); }
   // Keep digits, and a leading + for international numbers. Everything a
   // person might type around them — spaces, dashes, brackets — is noise.
   function cleanPhone(raw){
@@ -470,12 +485,17 @@
     var sep = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent || '') ? '&' : '?';
     return 'sms:' + cleanPhone(phone) + sep + 'body=' + encodeURIComponent(body);
   }
+  // The creditor is whoever picked up the check — which may well not be the
+  // person holding the phone. Name them explicitly rather than assuming the
+  // sender is owed the money.
   function oweMessage(d, p, url){
-    var tag = venmoTag();
+    var payer = (d.people || []).filter(function(x){ return x.id === d.payerId; })[0];
+    var tag = handleFor(payer);
     var where = d.place ? d.place : 'dinner';
     var when = d.date ? ' (' + fmtDate(d.date) + ')' : '';
-    return 'You owe ' + (tag ? tag + ' ' : '') + fmtMoney(p.total) + ' for ' + where + when +
-      '. Here is the itemised breakdown: ' + url;
+    return 'You owe ' + (payer ? payer.name : 'whoever paid') + ' ' + fmtMoney(p.total) +
+      ' for ' + where + when + '.' + (tag ? ' Venmo ' + tag + '.' : '') +
+      ' Here is the itemised breakdown: ' + url;
   }
 
   function newDinner(){
@@ -977,6 +997,7 @@
     if (d && (d.items.length || d.people.length)){
       var where = d.place || 'Untitled dinner';
       var n = d.items.length;
+      out += '<div class="sec" style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--brass);font-weight:700;">In progress</div>';
       out += '<button class="resume-card" data-action="resume">' +
         '<span><span class="t">' + esc(where) + '</span>' +
         '<span class="s">' + fmtDate(d.date) + ' · ' + n + ' item' + (n === 1 ? '' : 's') +
@@ -988,6 +1009,24 @@
     out += '<button class="btn btn-primary btn-block" data-action="start-new">' + ICONS.plus + ' Start a new split</button>';
     out += '<button class="btn btn-secondary btn-block" data-action="go" data-view="roster">' + ICONS.users + ' Who you dine with</button>';
     out += '</div>';
+
+    var past = state.dinners || [];
+    if (past.length){
+      out += '<h2 class="sec">Settled</h2>';
+      out += '<div class="card card-flush">' + past.map(function(p){
+        var split = computeSplit(p);
+        return '<div class="row">' +
+          '<div class="grow row-tap" data-action="open-archived" data-id="' + p.id + '">' +
+          '<div class="nm">' + esc(p.place || 'Untitled dinner') + '</div>' +
+          '<div class="meta">' + esc(fmtDate(p.date)) + ' · ' + esc(fmtMoney(split.total)) +
+          (p.people.length ? ' · ' + p.people.length + ' people' : '') + '</div></div>' +
+          '<button class="icon-btn" data-action="del-archived" data-id="' + p.id + '" aria-label="Delete the split from ' + esc(p.place || 'this dinner') + '">' + ICONS.trash + '</button>' +
+          '<span style="color:var(--ink-dim)" data-action="open-archived" data-id="' + p.id + '">' + ICONS.chev + '</span>' +
+          '</div>';
+      }).join('') + '</div>';
+      out += '<p class="helper" style="margin-top:10px;font-size:13px;">Tap one to look at it again or send the link round a second time.</p>';
+    }
+
     out += '</div>';
     return out;
   }
@@ -1003,7 +1042,19 @@
       '<div class="prefix-field"><span class="prefix">@</span>' +
       '<input id="venmo" type="text" data-bind="venmo" value="' + esc(v.replace(/^@+/, '')) + '" placeholder="your-handle" autocapitalize="none" autocorrect="off" spellcheck="false"></div></div>';
     out += '</div>';
-    out += '<p class="helper">Each person gets a message telling them what they owe and where to send it. The handle goes in <b>messages you send</b> and nowhere else — not into the shared breakdown link, which can be forwarded on to people you never picked. Phone numbers never leave this device at all.</p>';
+    out += '<p class="helper">Used when <b>you</b> picked up the check. When somebody else paid, their handle is quoted instead — set that against their name in <button class="link-btn" style="padding:0" data-action="go" data-view="roster">who you dine with</button>. A handle only ever goes into <b>messages you send</b>, never into the shared link, which can be forwarded on to people you never picked. Phone numbers never leave this device at all.</p>';
+
+    out += '<h2 class="sec">Which one is you?</h2>';
+    if (!state.roster.length){
+      out += '<div class="empty">Add the people you dine with first, then come back and pick yourself out.</div>';
+    } else {
+      out += '<div class="pgrid">' + state.roster.map(function(p){
+        var on = state.settings.meId === p.id;
+        return '<button class="ptile ' + (on ? 'on' : '') + '" data-action="set-me" data-id="' + p.id + '">' +
+          avatar(p) + '<span>' + esc(p.name) + '</span><span class="tick">' + ICONS.check + '</span></button>';
+      }).join('') + '</div>';
+      out += '<p class="helper" style="margin-top:10px;">So the app knows not to text you your own share, and can tell you what <em>you</em> owe when someone else paid.</p>';
+    }
 
     var key = (state.settings.geminiKey || '');
     out += '<h2 class="sec">Scanning receipts</h2>';
@@ -1469,17 +1520,37 @@
     out += '<h2 class="sec">How it adds up</h2>';
     out += summaryCard(split);
 
-    out += '<h2 class="sec">Tell everyone what they owe</h2>';
-    if (!venmoTag()){
-      out += '<div class="note">Add your Venmo handle and each message will say exactly where to send the money. ' +
-        '<button class="link-btn" style="padding:4px 0;display:block" data-action="go" data-view="settings">Add your handle &rarr;</button></div>';
+    var payerP = person(d.payerId);
+    var payerTag = handleFor(payerP);
+    var youPaid = isMe(payerP);
+
+    // What you personally owe, when the check was someone else's. This is not
+    // a message to send — it is a reminder to pay.
+    var yours = state.settings.meId && !youPaid
+      ? ranked.filter(function(p){ return p.id === state.settings.meId; })[0]
+      : null;
+    if (yours && payerP){
+      out += '<h2 class="sec">Your share</h2>';
+      out += '<div class="card" style="text-align:center;padding:18px 16px;">' +
+        '<div style="color:var(--ink-soft);font-size:13.5px;">You owe ' + esc(payerP.name) + '</div>' +
+        '<div class="money" style="font-size:32px;font-weight:750;margin:6px 0 2px;">' + fmtMoney(yours.total) + '</div>' +
+        (payerTag ? '<div style="color:var(--brass);font-weight:700;">Venmo ' + esc(payerTag) + '</div>' : '') +
+        '</div>';
     }
 
-    // The payer is the one owed, so they are not on this list. Order matches
-    // the cards above so the two read as the same list.
-    var owing = ranked.filter(function(p){ return p.id !== d.payerId; });
+    out += '<h2 class="sec">' + (youPaid ? 'Tell everyone what they owe' : 'Pass it on to the others') + '</h2>';
+    if (payerP && !payerTag){
+      out += '<div class="note">Nobody is told where to send the money. Add ' +
+        (youPaid ? 'your Venmo handle' : esc(payerP.name) + '&rsquo;s Venmo handle') + ' and every message will say. ' +
+        '<button class="link-btn" style="padding:4px 0;display:block" data-action="go" data-view="' + (youPaid ? 'settings' : 'roster') + '">' +
+        (youPaid ? 'Add your handle' : 'Add it in who you dine with') + ' &rarr;</button></div>';
+    }
+
+    // The payer is owed, so they are not on this list — and neither are you,
+    // since you do not text yourself. Order matches the cards above.
+    var owing = ranked.filter(function(p){ return p.id !== d.payerId && p.id !== state.settings.meId; });
     if (!owing.length){
-      out += '<div class="empty">Nobody to chase — everyone here is the one who paid.</div>';
+      out += '<div class="empty">Nobody to message — there is only you and whoever paid.</div>';
     } else {
       out += '<div class="card card-flush">' + owing.map(function(p){
         var who = person(p.id) || {};
@@ -1496,8 +1567,9 @@
           '</div>';
       }).join('') + '</div>';
       out += '<p class="helper" style="margin-top:10px;font-size:13px;">Each message is written for that person — what they owe' +
-        (venmoTag() ? ', that it goes to ' + esc(venmoTag()) : '') + ', and a link that opens on their share of the bill. ' +
-        'Numbers are saved against a name in <button class="link-btn" style="padding:0" data-action="go" data-view="roster">who you dine with</button>.</p>';
+        (payerP ? ', that it goes to ' + esc(payerP.name) : '') + (payerTag ? ' at ' + esc(payerTag) : '') +
+        ', and a link that opens on their share of the bill. ' +
+        'Numbers and handles are saved against a name in <button class="link-btn" style="padding:0" data-action="go" data-view="roster">who you dine with</button>.</p>';
     }
 
     out += '<h2 class="sec">Or send one link to the group</h2>';
@@ -1508,7 +1580,7 @@
 
     out += footbar(
       '<button class="btn btn-primary btn-block" data-action="share-link">' + ICONS.share + ' Share the breakdown</button>' +
-      '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="start-new">Start another split</button>'
+      '<button class="btn btn-secondary btn-block" style="margin-top:10px" data-action="finish-split">' + ICONS.check + ' Done — save this split</button>'
     );
     return out;
   }
@@ -1560,6 +1632,8 @@
           '<button class="icon-btn" data-action="del-person" data-id="' + p.id + '" aria-label="Remove ' + esc(p.name) + '">' + ICONS.trash + '</button>' +
           '<div class="prefix-field" style="flex:1 0 100%;margin-left:42px;"><span class="prefix">' + ICONS.phone + '</span>' +
           '<input type="tel" inputmode="tel" data-bind="roster-phone" data-id="' + p.id + '" value="' + esc(p.phone || '') + '" placeholder="Mobile number (optional)" aria-label="Mobile number for ' + esc(p.name) + '"></div>' +
+          '<div class="prefix-field" style="flex:1 0 100%;margin-left:42px;margin-top:8px;"><span class="prefix">@</span>' +
+          '<input type="text" data-bind="roster-venmo" data-id="' + p.id + '" value="' + esc(String(p.venmo || '').replace(/^@+/, '')) + '" placeholder="Venmo handle (for when they pay)" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Venmo handle for ' + esc(p.name) + '"></div>' +
           '</div>';
       }).join('');
     }
@@ -1688,7 +1762,7 @@
     if (phoneField && phoneField.value.trim()) p.phone = phoneField.value.trim();
     var target = state.ui.sheet && state.ui.sheet.target;
     if (target === 'people' && D() && !D().people.some(function(x){ return x.id === p.id; })){
-      D().people.push({ id: p.id, name: p.name, color: p.color, phone: p.phone || '' });
+      D().people.push({ id: p.id, name: p.name, color: p.color, phone: p.phone || '', venmo: p.venmo || '' });
       if (!D().payerId) D().payerId = p.id;
     }
     state.ui.sheet = null;
@@ -1728,8 +1802,54 @@
   }
 
   /* ---------------- actions ---------------- */
+  // Put the current split on the shelf. Anything with something in it is
+  // worth keeping; a blank one that was never used is not.
+  function archiveCurrent(){
+    var d = D();
+    if (!d) return false;
+    if (!d.items.length && !d.people.length){ state.dinner = null; return false; }
+    d.closedAt = Date.now();
+    state.dinners = (state.dinners || []).filter(function(x){ return x.id !== d.id; });
+    state.dinners.unshift(d);
+    if (state.dinners.length > KEEP_SPLITS) state.dinners.length = KEEP_SPLITS;
+    state.dinner = null;
+    return true;
+  }
+
+  function finishSplit(){
+    var saved = archiveCurrent();
+    state.ui.open = {};
+    save();
+    go('home');
+    if (saved) showToast('Split saved');
+  }
+
+  function openArchived(id){
+    var pick = (state.dinners || []).filter(function(x){ return x.id === id; })[0];
+    if (!pick) return;
+    // Whatever is on the bench goes back on the shelf first, so reopening an
+    // old split never costs you the one you were in the middle of.
+    archiveCurrent();
+    state.dinners = state.dinners.filter(function(x){ return x.id !== id; });
+    state.dinner = pick;
+    state.ui.open = {};
+    save();
+    go('result');
+  }
+
+  // Nothing here is recoverable once gone, so this is the one place that asks.
+  function deleteArchived(id){
+    var pick = (state.dinners || []).filter(function(x){ return x.id === id; })[0];
+    if (!pick) return;
+    if (!window.confirm('Delete the split from ' + (pick.place || 'this dinner') + '? This cannot be undone.')) return;
+    state.dinners = state.dinners.filter(function(x){ return x.id !== id; });
+    save();
+    render();
+  }
+
   function startNew(){
-    if (D() && D().items.length && !window.confirm('Start over? The split you have in progress will be replaced.')) return;
+    // No warning and no loss: whatever was in progress is filed away first.
+    archiveCurrent();
     state.dinner = newDinner();
     state.ui.open = {};
     go('capture');
@@ -1823,7 +1943,7 @@
       });
       if (d.payerId === id) d.payerId = d.people.length ? d.people[0].id : null;
     } else {
-      d.people.push({ id: p.id, name: p.name, color: p.color, phone: p.phone || '' });
+      d.people.push({ id: p.id, name: p.name, color: p.color, phone: p.phone || '', venmo: p.venmo || '' });
       if (!d.payerId) d.payerId = p.id;
     }
     save();
@@ -1834,9 +1954,12 @@
     var url = encodeShare(D());
     var title = (D().place ? D().place + ' — ' : '') + 'the damage';
     // The handle rides in the message, which you address and send, rather
-    // than in the link, which carries on without you.
-    var tag = venmoTag();
-    var text = 'Here is what everyone owes' + (tag ? ' — send it to ' + tag + ' on Venmo' : '') + ':';
+    // than in the link, which carries on without you. Whose handle depends on
+    // who actually picked up the check.
+    var payer = person(D().payerId);
+    var tag = handleFor(payer);
+    var text = 'Here is what everyone owes' + (payer ? ' ' + payer.name : '') +
+      (tag ? ' — Venmo ' + tag : '') + ':';
     if (navigator.share){
       navigator.share({ title: title, text: text, url: url }).catch(function(){});
       return;
@@ -1926,6 +2049,12 @@
         state.ui.sheet = { type: 'addPerson', target: state.ui.view === 'roster' ? 'roster' : 'people' };
         render();
         break;
+      case 'set-me':
+        // Tapping the one already chosen clears it, so you can undo a mis-tap.
+        state.settings.meId = (state.settings.meId === id) ? null : id;
+        save();
+        render();
+        break;
       case 'set-payer':
         d.payerId = (d.payerId === id) ? null : id;
         save();
@@ -1970,6 +2099,9 @@
         break;
 
       case 'to-result': go('result'); break;
+      case 'finish-split': finishSplit(); break;
+      case 'open-archived': openArchived(id); break;
+      case 'del-archived': deleteArchived(id); break;
       case 'toggle-open':
         state.ui.open[id] = !state.ui.open[id];
         save();
@@ -2055,6 +2187,14 @@
         if (rp){
           rp.name = el.value;
           if (d) d.people.forEach(function(x){ if (x.id === id) x.name = el.value; });
+        }
+        break;
+      }
+      case 'roster-venmo': {
+        var rv = state.roster.filter(function(x){ return x.id === id; })[0];
+        if (rv){
+          rv.venmo = el.value;
+          if (d) d.people.forEach(function(x){ if (x.id === id) x.venmo = el.value; });
         }
         break;
       }
