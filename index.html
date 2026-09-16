@@ -921,7 +921,7 @@
   }
 
   /* ---------------- view helpers ---------------- */
-  var BACK = { capture:'home', items:'capture', people:'items', assign:'people', result:'assign', roster:'home', howto:'home', settings:'home' };
+  var BACK = { capture:'home', items:'capture', people:'items', assign:'people', result:'assign', roster:'home', howto:'capture', settings:'home' };
   var STEPS = ['capture','items','people','assign','result'];
 
   function avatar(p, cls){
@@ -977,7 +977,6 @@
     out += '<div class="home-actions">';
     out += '<button class="btn btn-primary btn-block" data-action="start-new">' + ICONS.plus + ' Start a new split</button>';
     out += '<button class="btn btn-secondary btn-block" data-action="go" data-view="roster">' + ICONS.users + ' Who you dine with</button>';
-    out += '<button class="btn btn-ghost btn-block" data-action="go" data-view="howto">' + ICONS.share + ' Set up one-tap scanning</button>';
     out += '</div>';
     out += '</div>';
     return out;
@@ -1217,7 +1216,8 @@
     out += '</div>';
     out += footbar(
       '<button class="btn btn-secondary btn-block" data-action="parse-raw">Read the pasted text</button>' +
-      '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="skip-to-items">Enter items by hand instead</button>',
+      '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="skip-to-items">Enter items by hand instead</button>' +
+      '<button class="link-btn btn-block" style="margin-top:4px" data-action="go" data-view="howto">A photo will not read?</button>',
       'Pasted text is read on your phone. A scanned photo is sent to Google to be read.'
     );
     return out;
@@ -1558,31 +1558,32 @@
   }
 
   /* ---------------- one-tap scanning ---------------- */
+  // The fallback for when a scan misbehaves. There used to be an iOS Shortcut
+  // here; it is gone, because it returned through an https link, which opens
+  // Safari rather than the installed app — and a standalone PWA keeps its own
+  // storage, so it landed in a copy with no roster and no settings.
   function renderHowto(){
-    var url = APP_URL + 'index.html';
-    var out = topbar('One-tap scanning', null, 'home');
+    var out = topbar('If a scan goes wrong', null, 'capture');
     out += '<div class="body">';
-    out += '<p class="helper">iOS reads text from photos on the device itself, for free and with no network. This app just needs the words. There are two ways to hand them over.</p>';
+    out += '<p class="helper">Scanning is the quick path: <b>Scan the receipt</b> takes the photo and reads it in one go. When a photo will not read — bad light, a fold across the middle, a receipt longer than the frame — there is a way to get the words out without typing them.</p>';
 
-    out += '<h2 class="sec">The no-setup way</h2>';
+    out += '<h2 class="sec">Let iOS read it instead</h2>';
+    out += '<p class="helper" style="margin-bottom:12px;">iPhones recognise text in photos on the device itself, and it is very good. Hand the words over and the app will do the rest.</p>';
     out += '<ol class="steps-list">' +
       '<li>Take a photo of the receipt, or screenshot the digital one.</li>' +
       '<li>Open it in <b>Photos</b> and <b>press and hold</b> the picture.</li>' +
       '<li>Tap <span class="kbd">Copy All Text</span> — or <span class="kbd">Select All</span> then <span class="kbd">Copy</span>.</li>' +
-      '<li>Come back here, start a split, and tap <b>Paste receipt text</b>.</li>' +
+      '<li>Come back here and tap <b>Paste receipt text</b>.</li>' +
       '</ol>';
 
-    out += '<h2 class="sec">The one-tap way</h2>';
-    out += '<p class="helper">A Shortcut you build once, then run straight from any photo&rsquo;s share sheet. Open the <b>Shortcuts</b> app, tap <b>+</b>, and add these four actions in order:</p>';
-    out += '<ol class="steps-list">' +
-      '<li><b>Receive</b> Images from the <b>Share Sheet</b> — tap the shortcut&rsquo;s settings and switch this on.</li>' +
-      '<li><b>Extract Text from Image</b> — feed it the Shortcut Input.</li>' +
-      '<li><b>URL Encode</b> the Extracted Text.</li>' +
-      '<li><b>Open URLs</b>, with the URL set to this, followed by the encoded text:</li>' +
-      '</ol>';
-    out += '<button class="link-copy" data-action="copy-scheme"><span>' + esc(url.replace(/^https?:\/\//, '')) + '#t=</span>' + ICONS.link + '</button>';
-    out += '<p class="helper" style="margin-top:12px;font-size:13.5px;">Name it <b>Split This Receipt</b>. From then on: share any receipt photo, tap the shortcut, and the items are already listed here. It works from the Action Button and Control Centre too.</p>';
-    out += '<div class="note" style="margin-top:6px;">If <b>URL Encode</b> is not in your version of Shortcuts, use <b>Copy to Clipboard</b> and then <b>Open URLs</b> with just the address above — you will land on the paste screen with one tap left to go.</div>';
+    out += '<h2 class="sec">Getting a better scan</h2>';
+    out += '<ul class="helper" style="padding-left:18px;line-height:1.7;">' +
+      '<li>Flatten the receipt and shoot straight down, not at an angle.</li>' +
+      '<li>Keep the whole thing in frame, including the total.</li>' +
+      '<li>Avoid glare — thermal paper is shiny, so move out from under a spotlight.</li>' +
+      '<li>For a very long receipt, the pasted-text route handles it better than one photo.</li>' +
+      '</ul>';
+    out += '<div class="note">Whatever comes back, check the prices on the review screen. The app warns you when the items stop adding up to the subtotal, which is how a misread digit gets caught.</div>';
     out += '</div>';
     return out;
   }
@@ -1973,9 +1974,6 @@
         break;
       }
       case 'share-link': shareResult(); break;
-      case 'copy-scheme':
-        copyToClipboard(APP_URL + 'index.html#t=').then(function(){ showToast('Address copied'); }, function(){ showToast('Could not copy'); });
-        break;
 
       case 'leave-shared':
         sharedView = null;
