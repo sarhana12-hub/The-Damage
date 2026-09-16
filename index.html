@@ -99,6 +99,13 @@
 
   .home-top{display:flex;justify-content:flex-end;padding:12px 14px 0;}
 
+  /* ---------- scanning ---------- */
+  .busy{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:16vh 24px;text-align:center;color:var(--ink-soft);line-height:1.5;}
+  .spin{width:36px;height:36px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--brass);animation:sp .8s linear infinite;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+  .or-rule{display:flex;align-items:center;gap:12px;color:var(--ink-dim);font-size:12px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin:20px 0 14px;}
+  .or-rule::before,.or-rule::after{content:"";flex:1;height:1px;background:var(--border);}
+
   /* ---------- prefixed + paired inputs ---------- */
   .prefix-field{display:flex;align-items:center;background:var(--bg-lift);border:1px solid var(--border);border-radius:12px;padding-left:13px;}
   .prefix-field:focus-within{outline:2px solid var(--brass-deep);outline-offset:1px;border-color:transparent;}
@@ -237,6 +244,8 @@
     link: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>',
     share: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3"></path><polyline points="7 8 12 3 17 8"></polyline><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5"></path></svg>',
     paste: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1"></rect></svg>',
+    camera: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>',
+    image: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>',
     send: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>',
     copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
     phone: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>',
@@ -377,7 +386,7 @@
 
   /* ---------------- state ---------------- */
   function defaultUi(){ return { view:'home', sheet:null, open:{}, editing:false }; }
-  function defaultSettings(){ return { venmo: '' }; }
+  function defaultSettings(){ return { venmo: '', geminiKey: '', geminiModel: '' }; }
   function defaultState(){ return { roster: [], dinner: null, settings: defaultSettings(), ui: defaultUi() }; }
 
   function load(){
@@ -390,8 +399,11 @@
           if (!parsed.ui.open) parsed.ui.open = {};
           if (!parsed.settings) parsed.settings = defaultSettings();
           // An open sheet is a moment, not a place. Coming back to the app
-          // should never restore a half-finished dialog over the top.
+          // should never restore a half-finished dialog over the top — and
+          // the same goes for a spinner or an error from a scan that is over.
           parsed.ui.sheet = null;
+          parsed.ui.busy = null;
+          parsed.ui.scanError = '';
           return parsed;
         }
       }
@@ -984,6 +996,19 @@
     out += '</div>';
     out += '<p class="helper">Each person gets a message telling them what they owe and where to send it. The handle goes in that message and in the shared breakdown — your phone numbers never do, they stay on this device.</p>';
 
+    var key = (state.settings.geminiKey || '');
+    out += '<h2 class="sec">Scanning receipts</h2>';
+    out += '<div class="card">';
+    out += '<div class="field" style="margin:0;"><label for="gkey">Google AI API key</label>' +
+      '<input id="gkey" type="password" class="text-input mono" data-bind="gkey" value="' + esc(key) + '" placeholder="AIza…" autocapitalize="none" autocorrect="off" spellcheck="false"></div>';
+    if (key.trim()){
+      out += '<div class="tiechip ok" style="margin-top:12px;">' + ICONS.check + '<span>Key saved' +
+        (state.settings.geminiModel ? ' — last read by ' + esc(state.settings.geminiModel) : '') + '. Scanning is on.</span></div>';
+    }
+    out += '</div>';
+    out += '<p class="helper">Get a free key at <b>aistudio.google.com/apikey</b> — no card needed. It is stored only on this phone, never in the app&rsquo;s code and never in a shared link. ' +
+      'A scanned photo is sent to Google to be read; pasted text never leaves the device.</p>';
+
     out += '<h2 class="sec">Phone numbers</h2>';
     out += '<p class="helper" style="margin-bottom:10px;">Add a number to anyone you split with and their message can be sent straight from Messages, already written.</p>';
     out += '<button class="btn btn-secondary btn-block" data-action="go" data-view="roster">' + ICONS.users + ' Who you dine with</button>';
@@ -991,22 +1016,209 @@
     return out;
   }
 
+  /* ---------------- reading a photographed receipt ----------------
+     The camera opens inside the app; the picture is shrunk on the device and
+     sent to a model that returns the line items already structured, so there
+     is no OCR-then-guess-the-columns step at all.
+
+     Everything about *where* that happens is confined to readReceiptImage
+     below. Pointing it at a proxy instead of straight at Google is a change
+     to that one function and nothing else. */
+
+  var MAX_EDGE = 1600;        // small print stays legible, upload stays quick
+  var JPEG_Q = 0.8;
+  // Tried in order; whichever answers first is remembered in settings, so a
+  // retired model id heals itself on the next scan instead of needing a push.
+  var GEMINI_MODELS = ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+
+  var SCAN_PROMPT = [
+    'This is a photograph of a restaurant receipt. Transcribe it.',
+    '',
+    'Rules:',
+    '- Return every ordered line item, in the order printed.',
+    '- Use the extended price actually printed for that line (the price for the whole quantity), not the unit price.',
+    '- Keep item names as printed, just cleaned of dot leaders and padding.',
+    '- A modifier with its own price (for example "Add bacon 3.00") is its own line item.',
+    '- Do NOT put subtotal, tax, tip, gratuity, service charge or total in the items array. Report those separately.',
+    '- Ignore card numbers, server names, table numbers, addresses, phone numbers and marketing text.',
+    '- A discount or comp is an item with a negative price.',
+    '- If a suggested-tip table is printed (18% / 20% / 22%), that is NOT the tip. Only report a tip that was actually charged.',
+    '- Every money value is an INTEGER NUMBER OF CENTS. 14.00 is 1400. A discount of 5.00 is -500.',
+    '- If a value is not printed on the receipt, omit that field rather than guessing.',
+    '- Do not invent items. If a line is unreadable, give your best transcription of the name and its price.'
+  ].join('\n');
+
+  var SCAN_SCHEMA = {
+    type: 'object',
+    properties: {
+      place: { type: 'string' },
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            qty: { type: 'integer' },
+            price_cents: { type: 'integer' }
+          },
+          required: ['name', 'price_cents']
+        }
+      },
+      subtotal_cents: { type: 'integer' },
+      tax_cents: { type: 'integer' },
+      tip_cents: { type: 'integer' },
+      total_cents: { type: 'integer' }
+    },
+    required: ['items']
+  };
+
+  // Shrink on the phone before uploading. A 12MP camera frame is ~4MB and
+  // adds seconds of upload for detail the model cannot use anyway.
+  function fileToJpeg(file){
+    return new Promise(function(resolve, reject){
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function(){
+        try{
+          var scale = Math.min(1, MAX_EDGE / Math.max(img.width, img.height));
+          var w = Math.max(1, Math.round(img.width * scale));
+          var h = Math.max(1, Math.round(img.height * scale));
+          var c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          var ctx = c.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          URL.revokeObjectURL(url);
+          var dataUrl = c.toDataURL('image/jpeg', JPEG_Q);
+          resolve(dataUrl.slice(dataUrl.indexOf(',') + 1));
+        }catch(err){ URL.revokeObjectURL(url); reject(err); }
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('That image could not be opened.')); };
+      img.src = url;
+    });
+  }
+
+  function geminiCall(model, b64){
+    return fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': state.settings.geminiKey.trim() },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: SCAN_PROMPT }, { inline_data: { mime_type: 'image/jpeg', data: b64 } }] }],
+        generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: SCAN_SCHEMA }
+      })
+    });
+  }
+
+  // The single seam between the app and whatever reads receipts.
+  function readReceiptImage(b64){
+    var key = (state.settings.geminiKey || '').trim();
+    if (!key) return Promise.reject(new Error('NO_KEY'));
+
+    var tries = [];
+    if (state.settings.geminiModel) tries.push(state.settings.geminiModel);
+    GEMINI_MODELS.forEach(function(m){ if (tries.indexOf(m) < 0) tries.push(m); });
+
+    function attempt(i){
+      if (i >= tries.length) return Promise.reject(new Error('No usable model. Check the key is a Gemini API key.'));
+      return geminiCall(tries[i], b64).then(function(res){
+        if (res.status === 404 || res.status === 400){
+          // Wrong model name for this key: step to the next candidate.
+          return res.text().then(function(t){
+            if (/not found|not supported|unsupported|does not exist/i.test(t) && i + 1 < tries.length) return attempt(i + 1);
+            throw new Error(friendlyError(res.status, t));
+          });
+        }
+        if (!res.ok) return res.text().then(function(t){ throw new Error(friendlyError(res.status, t)); });
+        state.settings.geminiModel = tries[i];
+        save();
+        return res.json();
+      });
+    }
+    return attempt(0).then(parseGeminiJson);
+  }
+
+  function friendlyError(status, body){
+    if (status === 401 || status === 403) return 'That API key was refused. Check it in Settings.';
+    if (status === 429) return 'Google is rate-limiting the key. Wait a moment and try again.';
+    if (status >= 500) return 'Google had a server error. Try again.';
+    var m = /"message"\s*:\s*"([^"]{0,160})/.exec(body || '');
+    return m ? m[1] : ('The reader returned an error (' + status + ').');
+  }
+
+  function parseGeminiJson(payload){
+    var parts = payload && payload.candidates && payload.candidates[0] &&
+                payload.candidates[0].content && payload.candidates[0].content.parts;
+    var text = parts && parts.map(function(p){ return p.text || ''; }).join('');
+    if (!text) throw new Error('The reader sent nothing back. Try another photo.');
+    var raw;
+    try{ raw = JSON.parse(text); }
+    catch(e){
+      // Belt and braces: dig the object out even if it arrives fenced.
+      var s = text.indexOf('{'), e2 = text.lastIndexOf('}');
+      if (s < 0 || e2 <= s) throw new Error('The reader sent something unreadable.');
+      raw = JSON.parse(text.slice(s, e2 + 1));
+    }
+    var cents = function(v){ return typeof v === 'number' && isFinite(v) ? Math.round(v) : null; };
+    return {
+      place: typeof raw.place === 'string' ? raw.place.trim() : '',
+      items: (raw.items || []).map(function(it){
+        return {
+          id: uid(),
+          name: String(it.name == null ? 'Item' : it.name).trim() || 'Item',
+          cents: cents(it.price_cents) || 0,
+          qty: it.qty && it.qty > 0 ? it.qty : 1,
+          who: []
+        };
+      }),
+      subtotal: cents(raw.subtotal_cents),
+      tax: cents(raw.tax_cents),
+      tip: cents(raw.tip_cents),
+      total: cents(raw.total_cents)
+    };
+  }
+
   /* ---------------- capture ---------------- */
   function renderCapture(){
     var d = D();
     var out = topbar('The receipt', null, 'home') + stepbar('capture');
+
+    if (state.ui.busy){
+      return out + '<div class="busy"><div class="spin"></div><div>' + esc(state.ui.busy) + '</div>' +
+        '<div style="font-size:13px;color:var(--ink-dim)">Usually a few seconds.</div></div>';
+    }
+
     out += '<div class="body">';
-    out += '<div class="note"><b>Fastest way:</b> open the receipt photo in Photos, press and hold the picture, then tap <span class="kbd">Copy All Text</span>. Come back here and paste. ' +
-      '<button class="link-btn" style="padding:4px 0;display:block" data-action="go" data-view="howto">Or set up one-tap scanning &rarr;</button></div>';
-    out += '<button class="btn btn-primary btn-block" data-action="paste-clip">' + ICONS.paste + ' Paste receipt text</button>';
+
+    if (state.ui.scanError){
+      out += '<div class="warn">' + esc(state.ui.scanError) + '</div>';
+    }
+
+    var hasKey = !!(state.settings.geminiKey || '').trim();
+    // The camera input opens the camera directly; the second one, without
+    // `capture`, reaches the photo library so a screenshot of a digital
+    // receipt works the same way.
+    out += '<input type="file" id="shot-cam" accept="image/*" capture="environment" style="display:none">';
+    out += '<input type="file" id="shot-lib" accept="image/*" style="display:none">';
+
+    if (hasKey){
+      out += '<button class="btn btn-primary btn-block" data-action="shoot">' + ICONS.camera + ' Scan the receipt</button>';
+      out += '<button class="btn btn-secondary btn-block" style="margin-top:10px" data-action="pick">' + ICONS.image + ' Choose a photo or screenshot</button>';
+    } else {
+      out += '<div class="note">Scanning needs a free Google AI key — one paste, once. ' +
+        '<button class="link-btn" style="padding:4px 0;display:block" data-action="go" data-view="settings">Set it up &rarr;</button></div>';
+    }
+
+    out += '<div class="or-rule">or paste the text</div>';
+    out += '<button class="btn ' + (hasKey ? 'btn-ghost' : 'btn-primary') + ' btn-block" data-action="paste-clip">' + ICONS.paste + ' Paste receipt text</button>';
     out += '<div class="field" style="margin-top:14px;"><label for="raw">Receipt text</label>' +
       '<textarea id="raw" class="text-input paste-area" data-bind="raw" placeholder="Paste here, or type the items out — one per line, price at the end:&#10;&#10;Caesar salad   14.00&#10;2 Burger       38.00&#10;Malbec         16.00&#10;Tax             6.23&#10;Total          90.23">' +
       esc(d && d.rawText ? d.rawText : '') + '</textarea></div>';
     out += '</div>';
     out += footbar(
-      '<button class="btn btn-primary btn-block" data-action="parse-raw">Read the receipt</button>' +
+      '<button class="btn btn-secondary btn-block" data-action="parse-raw">Read the pasted text</button>' +
       '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="skip-to-items">Enter items by hand instead</button>',
-      'Nothing is uploaded. The text never leaves your phone.'
+      'Pasted text is read on your phone. A scanned photo is sent to Google to be read.'
     );
     return out;
   }
@@ -1495,6 +1707,7 @@
   }
 
   function go(view){
+    if (view !== 'capture') state.ui.scanError = '';
     state.ui.view = view;
     save();
     render();
@@ -1531,6 +1744,57 @@
     save();
     go('items');
     if (announce) showToast(res.items.length ? 'Read ' + res.items.length + ' items' : 'Nothing to read');
+  }
+
+  function scanFile(file){
+    if (!(state.settings.geminiKey || '').trim()){
+      state.ui.scanError = '';
+      showToast('Add your AI key in Settings first');
+      go('settings');
+      return;
+    }
+    state.ui.scanError = '';
+    state.ui.busy = 'Reading the receipt…';
+    render();
+
+    fileToJpeg(file)
+      .then(readReceiptImage)
+      .then(function(res){
+        state.ui.busy = null;
+        ingestExtraction(res);
+      })
+      .catch(function(err){
+        state.ui.busy = null;
+        var msg = (err && err.message) || 'That did not work.';
+        if (msg === 'NO_KEY'){
+          msg = 'No API key set. Add one in Settings.';
+        } else if (err instanceof TypeError || /failed to fetch|load failed|networkerror/i.test(msg)){
+          // The one risk we knew about going in. Name it plainly rather than
+          // leaving a generic network error to be guessed at.
+          msg = 'The browser could not reach Google directly — this is the CORS limitation we expected might bite. ' +
+                'Your photo was not sent anywhere. Paste the text for now and tell Claude, which needs a small proxy to fix.';
+        }
+        state.ui.scanError = msg;
+        render();
+      });
+  }
+
+  function ingestExtraction(res){
+    var d = D() || (state.dinner = newDinner());
+    d.items = res.items;
+    if (!d.place && res.place) d.place = res.place;
+    if (res.tax != null) d.tax = res.tax;
+    if (res.tip != null){ d.tip = res.tip; d.tipMode = 'amt'; }
+    if (res.total != null) d.total = res.total;
+    d.parsedSubtotal = res.subtotal;
+
+    var n = res.items.length;
+    d.parseNote = n
+      ? 'Read ' + n + ' item' + (n === 1 ? '' : 's') + ' from the photo. Check the prices against the paper before you go on — a misread digit is the one thing that quietly breaks a split.'
+      : 'Nothing readable came back from that photo. Try again with more light and the whole receipt in frame, or add the items by hand.';
+    save();
+    go('items');
+    showToast(n ? 'Read ' + n + ' items' : 'Nothing readable');
   }
 
   function toggleRosterPerson(id){
@@ -1627,6 +1891,17 @@
         save();
         render();
         break;
+
+      case 'shoot': {
+        var cam = document.getElementById('shot-cam');
+        if (cam) cam.click();
+        break;
+      }
+      case 'pick': {
+        var lib = document.getElementById('shot-lib');
+        if (lib) lib.click();
+        break;
+      }
 
       case 'to-people': go('people'); break;
       case 'toggle-person': toggleRosterPerson(id); break;
@@ -1782,9 +2057,22 @@
       case 'venmo':
         state.settings.venmo = el.value;
         break;
+      case 'gkey':
+        state.settings.geminiKey = el.value;
+        // A new key may belong to a different model tier, so stop pinning the
+        // one the previous key happened to answer on.
+        state.settings.geminiModel = '';
+        break;
     }
   });
   document.addEventListener('change', function(e){
+    if (e.target.id === 'shot-cam' || e.target.id === 'shot-lib'){
+      var f = e.target.files && e.target.files[0];
+      // Clear it so picking the very same photo again still fires a change.
+      e.target.value = '';
+      if (f) scanFile(f);
+      return;
+    }
     if (e.target.getAttribute && e.target.getAttribute('data-bind')) save();
   });
   // Tidy the money fields once the keyboard goes away: "7" becomes "7.00".
