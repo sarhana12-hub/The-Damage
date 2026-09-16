@@ -485,17 +485,36 @@
     var sep = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent || '') ? '&' : '?';
     return 'sms:' + cleanPhone(phone) + sep + 'body=' + encodeURIComponent(body);
   }
-  // The creditor is whoever picked up the check — which may well not be the
-  // person holding the phone. Name them explicitly rather than assuming the
-  // sender is owed the money.
-  function oweMessage(d, p, url){
+  function dinnerHead(d){
+    return (d.place || 'Dinner') + (d.date ? ' · ' + fmtDate(d.date) : '');
+  }
+
+  // No link. The only reason to send one was the itemisation, and a person's
+  // own share is a handful of lines — short enough to put in the message,
+  // where it can be read at a glance instead of opening a page. It also means
+  // the recipient needs nothing installed, and the text does not arrive with
+  // four hundred characters of base64 stapled to it.
+  //
+  // The creditor is whoever picked up the check, which may well not be the
+  // person holding the phone.
+  function oweMessage(d, p){
     var payer = (d.people || []).filter(function(x){ return x.id === d.payerId; })[0];
     var tag = handleFor(payer);
-    var where = d.place ? d.place : 'dinner';
-    var when = d.date ? ' (' + fmtDate(d.date) + ')' : '';
-    return 'You owe ' + (payer ? payer.name : 'whoever paid') + ' ' + fmtMoney(p.total) +
-      ' for ' + where + when + '.' + (tag ? ' Venmo ' + tag + '.' : '') +
-      ' Here is the itemised breakdown: ' + url;
+    var out = [dinnerHead(d), 'You owe ' + (payer ? payer.name : 'whoever paid') + ' ' + fmtMoney(p.total), ''];
+    (p.lines || []).forEach(function(l){
+      var note = l.split > 1 ? ' (' + (l.orphan ? 'shared' : '1/' + l.split) + ' of ' + fmtMoney(l.full) + ')' : '';
+      out.push('· ' + (l.qty > 1 ? l.qty + '× ' : '') + l.name + note + '  ' + fmtMoney(l.cents));
+    });
+    if (p.tax) out.push('· Tax  ' + fmtMoney(p.tax));
+    if (p.tip) out.push('· Tip  ' + fmtMoney(p.tip));
+    if (p.adj) out.push('· Share of the rest  ' + fmtMoney(p.adj));
+    if (tag){ out.push(''); out.push('Venmo ' + tag); }
+    return out.join('\n');
+  }
+
+  // What you send the person who paid, when that was not you.
+  function payerMessage(d, mine){
+    return dinnerHead(d) + '\nI owe you ' + fmtMoney(mine.total) + ' for my share — sending it over.';
   }
 
   function newDinner(){
@@ -1546,29 +1565,34 @@
         (youPaid ? 'Add your handle' : 'Add it in who you dine with') + ' &rarr;</button></div>';
     }
 
-    // The payer is owed, so they are not on this list — and neither are you,
-    // since you do not text yourself. Order matches the cards above.
-    var owing = ranked.filter(function(p){ return p.id !== d.payerId && p.id !== state.settings.meId; });
-    if (!owing.length){
-      out += '<div class="empty">Nobody to message — there is only you and whoever paid.</div>';
+    // Everyone in the party gets their own button — you send whichever ones
+    // you want, and nobody is messaged as a side effect of messaging someone
+    // else. The only person missing is you.
+    var contacts = ranked.filter(function(p){ return p.id !== state.settings.meId; });
+    if (!contacts.length){
+      out += '<div class="empty">Nobody to message — there is only you here.</div>';
     } else {
-      out += '<div class="card card-flush">' + owing.map(function(p){
+      out += '<div class="card card-flush">' + contacts.map(function(p){
         var who = person(p.id) || {};
         var phone = cleanPhone(who.phone);
-        var idx = d.people.map(function(x){ return x.id; }).indexOf(p.id);
-        var msg = oweMessage(d, p, encodeShare(d, idx));
-        var sub = phone ? prettyPhone(phone) : 'No number saved';
+        var isPayer = p.id === d.payerId;
+        // The person who paid is owed, not owing, so they get the other half
+        // of the conversation.
+        var msg = (isPayer && yours) ? payerMessage(d, yours) : oweMessage(d, p);
+        var amount = (isPayer && yours) ? yours.total : p.total;
+        var sub = isPayer && yours ? 'you owe them' : (phone ? prettyPhone(phone) : 'No number saved');
         return '<div class="send-row">' + avatar(p) +
-          '<div class="grow"><div class="nm">' + esc(p.name) + '</div><div class="sm">' + esc(sub) + '</div></div>' +
-          '<div class="amt money">' + fmtMoney(p.total) + '</div>' +
+          '<div class="grow"><div class="nm">' + esc(p.name) + (isPayer ? ' <span class="payer-tag">paid</span>' : '') + '</div>' +
+          '<div class="sm">' + esc(sub) + '</div></div>' +
+          '<div class="amt money">' + fmtMoney(amount) + '</div>' +
           (phone
-            ? '<a class="send-btn" href="' + esc(smsHref(phone, msg)) + '">' + ICONS.send + ' Text</a>'
+            ? '<a class="send-btn' + (isPayer ? ' alt' : '') + '" href="' + esc(smsHref(phone, msg)) + '">' + ICONS.send + ' Text</a>'
             : '<button class="send-btn alt" data-action="copy-message" data-id="' + p.id + '">' + ICONS.copy + ' Copy</button>') +
           '</div>';
       }).join('') + '</div>';
-      out += '<p class="helper" style="margin-top:10px;font-size:13px;">Each message is written for that person — what they owe' +
-        (payerP ? ', that it goes to ' + esc(payerP.name) : '') + (payerTag ? ' at ' + esc(payerTag) : '') +
-        ', and a link that opens on their share of the bill. ' +
+      out += '<p class="helper" style="margin-top:10px;font-size:13px;">Send as many or as few as you like — each one is separate. The message lists that person&rsquo;s own items and their share of tax and tip' +
+        (payerTag ? ', and ends with ' + esc(payerTag) : '') +
+        ', so there is nothing to open and no link to wade through. ' +
         'Numbers and handles are saved against a name in <button class="link-btn" style="padding:0" data-action="go" data-view="roster">who you dine with</button>.</p>';
     }
 
@@ -2116,8 +2140,13 @@
         var split = computeSplit(d);
         var share = split.people.filter(function(x){ return x.id === id; })[0];
         if (!share) break;
-        var at = d.people.map(function(x){ return x.id; }).indexOf(id);
-        copyToClipboard(oweMessage(d, share, encodeShare(d, at)))
+        var mineNow = state.settings.meId
+          ? split.people.filter(function(x){ return x.id === state.settings.meId; })[0]
+          : null;
+        var body = (id === d.payerId && mineNow && mineNow.id !== d.payerId)
+          ? payerMessage(d, mineNow)
+          : oweMessage(d, share);
+        copyToClipboard(body)
           .then(function(){ showToast('Message for ' + share.name + ' copied'); }, function(){ showToast('Could not copy'); });
         break;
       }
