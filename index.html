@@ -865,7 +865,9 @@
       pl: d.place || '',
       dt: d.date || '',
       py: d.payerId != null && order[d.payerId] != null ? order[d.payerId] : -1,
-      vm: venmoTag(),
+      // The Venmo handle is deliberately NOT in here. It goes in the message
+      // you send to a person you chose; a link outlives that choice and gets
+      // forwarded on to people you never picked.
       // Names and colours only. A phone number is for this device to dial,
       // never for a link that will be forwarded around a group chat.
       pe: (d.people || []).map(function(p){
@@ -905,7 +907,9 @@
       id: 'shared',
       place: String(raw.pl || ''),
       date: String(raw.dt || ''),
-      venmo: String(raw.vm || ''),
+      // Any handle in an older link is ignored rather than shown, so links
+      // already sent stop carrying it too.
+      venmo: '',
       youId: people[youIndex] ? people[youIndex].id : null,
       people: people,
       payerId: raw.py >= 0 && people[raw.py] ? people[raw.py].id : null,
@@ -999,7 +1003,7 @@
       '<div class="prefix-field"><span class="prefix">@</span>' +
       '<input id="venmo" type="text" data-bind="venmo" value="' + esc(v.replace(/^@+/, '')) + '" placeholder="your-handle" autocapitalize="none" autocorrect="off" spellcheck="false"></div></div>';
     out += '</div>';
-    out += '<p class="helper">Each person gets a message telling them what they owe and where to send it. The handle goes in that message and in the shared breakdown — your phone numbers never do, they stay on this device.</p>';
+    out += '<p class="helper">Each person gets a message telling them what they owe and where to send it. The handle goes in <b>messages you send</b> and nowhere else — not into the shared breakdown link, which can be forwarded on to people you never picked. Phone numbers never leave this device at all.</p>';
 
     var key = (state.settings.geminiKey || '');
     out += '<h2 class="sec">Scanning receipts</h2>';
@@ -1499,7 +1503,7 @@
     out += '<h2 class="sec">Or send one link to the group</h2>';
     var url = encodeShare(d);
     out += '<button class="link-copy" data-action="copy-link"><span>' + esc(url.replace(/^https?:\/\//, '')) + '</span>' + ICONS.link + '</button>';
-    out += '<p class="helper" style="margin-top:10px;font-size:13px;">The whole breakdown is packed into that link. Anyone can open it — no app, no account, nothing stored anywhere. Phone numbers are never part of it.</p>';
+    out += '<p class="helper" style="margin-top:10px;font-size:13px;">The whole breakdown is packed into that link. Anyone can open it — no app, no account, nothing stored anywhere. Neither your Venmo handle nor anyone&rsquo;s phone number is in it, so a link that gets forwarded on gives away nothing but the dinner.</p>';
     out += '</div>';
 
     out += footbar(
@@ -1528,11 +1532,9 @@
       out += '<div class="note" style="text-align:center;padding:18px 16px;">' +
         '<div style="color:var(--ink-soft);font-size:13.5px;">' + esc(you.name) + ', you owe' + (payer ? ' ' + esc(payer.name) : '') + '</div>' +
         '<div class="money" style="font-size:34px;font-weight:750;margin:6px 0 2px;">' + fmtMoney(yourShare.total) + '</div>' +
-        (d.venmo ? '<div style="color:var(--brass);font-weight:700;">Venmo ' + esc(d.venmo) + '</div>' : '') +
         '</div>';
     } else {
-      out += '<div class="note">Someone shared this breakdown with you' + (payer ? '. ' + esc(payer.name) + ' put it all on one card' : '') + '. Tap a name to see the detail.' +
-        (d.venmo ? ' Send it to <b>' + esc(d.venmo) + '</b> on Venmo.' : '') + '</div>';
+      out += '<div class="note">Someone shared this breakdown with you' + (payer ? '. ' + esc(payer.name) + ' put it all on one card' : '') + '. Tap a name to see the detail.</div>';
     }
     out += ranked.map(function(p){ return personCard(p, d); }).join('');
     out += '<h2 class="sec">How it adds up</h2>';
@@ -1831,8 +1833,12 @@
   function shareResult(){
     var url = encodeShare(D());
     var title = (D().place ? D().place + ' — ' : '') + 'the damage';
+    // The handle rides in the message, which you address and send, rather
+    // than in the link, which carries on without you.
+    var tag = venmoTag();
+    var text = 'Here is what everyone owes' + (tag ? ' — send it to ' + tag + ' on Venmo' : '') + ':';
     if (navigator.share){
-      navigator.share({ title: title, text: 'Here is what everyone owes:', url: url }).catch(function(){});
+      navigator.share({ title: title, text: text, url: url }).catch(function(){});
       return;
     }
     copyToClipboard(url).then(function(){ showToast('Link copied'); }, function(){ showToast('Could not copy the link'); });
