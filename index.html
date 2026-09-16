@@ -403,6 +403,14 @@
           if (!parsed.ui.open) parsed.ui.open = {};
           if (!parsed.settings) parsed.settings = defaultSettings();
           if (!Array.isArray(parsed.dinners)) parsed.dinners = [];
+          // Handles used to live in settings; they belong with their owner.
+          // Move it across once we know which person that is, and leave it
+          // alone until then rather than losing what was typed.
+          if (parsed.settings.venmo && parsed.settings.meId){
+            var mine = parsed.roster.filter(function(x){ return x.id === parsed.settings.meId; })[0];
+            if (mine && !mine.venmo) mine.venmo = parsed.settings.venmo;
+            if (mine) parsed.settings.venmo = '';
+          }
           // An open sheet is a moment, not a place. Coming back to the app
           // should never restore a half-finished dialog over the top — and
           // the same goes for a spinner or an error from a scan that is over.
@@ -452,18 +460,17 @@
      the point of it — but a phone number never is: see encodeShare, which
      copies only names and colours. */
 
-  function venmoTag(){
-    var v = String((state.settings && state.settings.venmo) || '').trim().replace(/^@+/, '');
-    return v ? '@' + v : '';
-  }
-  // Whose handle to quote depends on who is owed, which is not always you.
-  // Your own handle lives in Settings; everyone else's sits on their roster
-  // entry, so a dinner someone else paid for can still say where to send it.
+  // Every handle lives with its owner in the roster — yours included. The one
+  // quoted is always the payer's, no matter who is doing the texting, so
+  // telling someone to pay a third party works without special cases.
+  //
+  // The roster is the source of truth and the dinner's copy is the fallback:
+  // correcting a handle fixes the messages for past splits too, but a person
+  // deleted from the roster still has whatever was recorded at the time.
   function handleFor(p){
     if (!p) return '';
-    var mine = state.settings.meId && p.id === state.settings.meId;
-    var raw = mine ? (state.settings.venmo || p.venmo) : p.venmo;
-    raw = String(raw || '').trim().replace(/^@+/, '');
+    var live = (state.roster || []).filter(function(x){ return x.id === p.id; })[0];
+    var raw = String((live && live.venmo) || p.venmo || '').trim().replace(/^@+/, '');
     return raw ? '@' + raw : '';
   }
   function isMe(p){ return !!(p && state.settings.meId && p.id === state.settings.meId); }
@@ -1056,22 +1063,7 @@
     var v = (state.settings && state.settings.venmo) || '';
     var out = topbar('Settings', null, 'home');
     out += '<div class="body">';
-    out += '<h2 class="sec" style="margin-top:6px;">Getting paid back</h2>';
-    out += '<div class="card">';
-    out += '<div class="field" style="margin:0;"><label for="venmo">Your Venmo handle</label>' +
-      '<div class="prefix-field"><span class="prefix">@</span>' +
-      '<input id="venmo" type="text" data-bind="venmo" value="' + esc(v.replace(/^@+/, '')) + '" placeholder="your-handle" autocapitalize="none" autocorrect="off" spellcheck="false"></div></div>';
-    // Easy trap to fall into: a handle is only ever quoted for the person who
-    // paid, so until the app knows which of these people is you, yours is
-    // never used and nothing says why.
-    if (v.trim() && !state.settings.meId){
-      out += '<div class="tiechip off" style="margin-top:12px;">' + ICONS.warn +
-        '<span>This handle will not be used until you say which of the people below is you.</span></div>';
-    }
-    out += '</div>';
-    out += '<p class="helper">Used when <b>you</b> picked up the check. When somebody else paid, their handle is quoted instead — set that against their name in <button class="link-btn" style="padding:0" data-action="go" data-view="roster">who you dine with</button>. A handle only ever goes into <b>messages you send</b>, never into the shared link, which can be forwarded on to people you never picked. Phone numbers never leave this device at all.</p>';
-
-    out += '<h2 class="sec">Which one is you?</h2>';
+    out += '<h2 class="sec" style="margin-top:6px;">Which one is you?</h2>';
     if (!state.roster.length){
       out += '<div class="empty">Add the people you dine with first, then come back and pick yourself out.</div>';
     } else {
@@ -1080,8 +1072,28 @@
         return '<button class="ptile ' + (on ? 'on' : '') + '" data-action="set-me" data-id="' + p.id + '">' +
           avatar(p) + '<span>' + esc(p.name) + '</span><span class="tick">' + ICONS.check + '</span></button>';
       }).join('') + '</div>';
-      out += '<p class="helper" style="margin-top:10px;">So the app knows not to text you your own share, and can tell you what <em>you</em> owe when someone else paid.</p>';
+      out += '<p class="helper" style="margin-top:10px;">So the app never offers to text you your own share, and can tell you what <em>you</em> owe when somebody else paid.</p>';
     }
+
+    // Your handle is edited here for convenience, but it is stored on your
+    // roster entry exactly like everyone else's — there is no separate
+    // "my handle" any more, because the one that gets quoted is always
+    // whoever paid, and that may be neither you nor the person you are texting.
+    var me = state.settings.meId
+      ? state.roster.filter(function(x){ return x.id === state.settings.meId; })[0]
+      : null;
+    out += '<h2 class="sec">Getting paid back</h2>';
+    if (me){
+      out += '<div class="card">';
+      out += '<div class="field" style="margin:0;"><label for="venmo">' + esc(me.name) + '&rsquo;s Venmo handle — yours</label>' +
+        '<div class="prefix-field"><span class="prefix">@</span>' +
+        '<input id="venmo" type="text" data-bind="roster-venmo" data-id="' + me.id + '" value="' + esc(String(me.venmo || '').replace(/^@+/, '')) + '" placeholder="your-handle" autocapitalize="none" autocorrect="off" spellcheck="false"></div></div>';
+      out += '</div>';
+    } else {
+      out += '<div class="note">Pick yourself above and your Venmo handle can be set here. ' +
+        (v.trim() ? 'The handle you entered earlier is kept and will move across.' : '') + '</div>';
+    }
+    out += '<p class="helper">Everyone&rsquo;s handle is stored beside their name in <button class="link-btn" style="padding:0" data-action="go" data-view="roster">who you dine with</button>, and the one quoted is always <b>whoever picked up the check</b> — so telling someone to pay a third party works without you being involved in the money at all. A handle only goes into <b>messages you send</b>, never into a shared link that can be forwarded on. Phone numbers never leave this device.</p>';
 
     var key = (state.settings.geminiKey || '');
     out += '<h2 class="sec">Scanning receipts</h2>';
@@ -2235,12 +2247,20 @@
         state.ui.sheet = { type: 'addPerson', target: state.ui.view === 'roster' ? 'roster' : 'people' };
         render();
         break;
-      case 'set-me':
+      case 'set-me': {
         // Tapping the one already chosen clears it, so you can undo a mis-tap.
         state.settings.meId = (state.settings.meId === id) ? null : id;
+        // A handle typed before you said who you were has been waiting; now
+        // it has an owner, move it onto them.
+        if (state.settings.meId && state.settings.venmo){
+          var meNow = state.roster.filter(function(x){ return x.id === state.settings.meId; })[0];
+          if (meNow && !meNow.venmo) meNow.venmo = state.settings.venmo;
+          if (meNow) state.settings.venmo = '';
+        }
         save();
         render();
         break;
+      }
       case 'set-payer':
         d.payerId = (d.payerId === id) ? null : id;
         save();
@@ -2400,9 +2420,6 @@
         }
         break;
       }
-      case 'venmo':
-        state.settings.venmo = el.value;
-        break;
       case 'gkey':
         state.settings.geminiKey = el.value;
         // A new key may belong to a different model tier, so stop pinning the
