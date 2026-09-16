@@ -891,8 +891,14 @@
     var youIndex = dot >= 0 ? parseInt(frag.slice(dot + 1), 10) : -1;
     var raw = JSON.parse(b64urlDecode(dot >= 0 ? frag.slice(0, dot) : frag));
     if (!raw || raw.v !== 1 || !Array.isArray(raw.pe) || !Array.isArray(raw.it)) throw new Error('bad payload');
+    // A shared link is a stranger's input. Names are escaped where they are
+    // printed, but a colour goes into a style attribute, so anything that is
+    // not plainly a hex colour is thrown away rather than trusted — otherwise
+    // a crafted link could smuggle CSS (a url() beacon, say) into the page.
     var people = raw.pe.map(function(p, i){
-      var color = typeof p[1] === 'number' ? (PERSON_COLORS[p[1]] || PERSON_COLORS[0]) : String(p[1] || PERSON_COLORS[0]);
+      var color;
+      if (typeof p[1] === 'number') color = PERSON_COLORS[p[1]] || PERSON_COLORS[0];
+      else color = /^#[0-9a-f]{3,8}$/i.test(String(p[1] || '')) ? String(p[1]) : PERSON_COLORS[i % PERSON_COLORS.length];
       return { id: 'p' + i, name: String(p[0] || 'Someone'), color: color };
     });
     return {
