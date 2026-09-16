@@ -1637,9 +1637,14 @@
         // The picture already says what they owe and for what, so the message
         // it travels with is stripped to the one thing worth having as text:
         // the handle, sitting alone so it is easy to long-press and copy.
+        // A handle if there is one, otherwise who to settle with — and if
+        // nobody was marked as paying, at least the amount, because an image
+        // arriving with no words at all is worse than any of these.
         var picMsg = (isPayer && yours)
           ? payerMessage(d, yours)
-          : (payerTag || (payerP ? 'Settle up with ' + payerP.name : ''));
+          : (payerTag
+              || (payerP ? 'Settle up with ' + payerP.name
+                         : 'Your share of ' + (d.place || 'dinner') + ': ' + fmtMoney(p.total)));
         var amount = (isPayer && yours) ? yours.total : p.total;
         var sub = isPayer && yours ? 'you owe them' : (phone ? prettyPhone(phone) : 'No number saved');
         return '<div class="send-row">' + avatar(p) +
