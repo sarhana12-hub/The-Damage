@@ -1670,6 +1670,28 @@
         'Numbers and handles are saved against a name in <button class="link-btn" style="padding:0" data-action="go" data-view="roster">who you dine with</button>.</p>';
     }
 
+    // One message to everyone who owes, with a card of just the totals.
+    var groupTo = contacts.filter(function(p){
+      return p.id !== d.payerId && cleanPhone((person(p.id) || {}).phone);
+    });
+    var noNumber = contacts.filter(function(p){
+      return p.id !== d.payerId && !cleanPhone((person(p.id) || {}).phone);
+    });
+    if (groupTo.length > 1){
+      var groupBody = payerTag || (payerP ? 'Settle up with ' + payerP.name : 'Here is what everyone owes');
+      var numbers = groupTo.map(function(p){ return cleanPhone((person(p.id) || {}).phone); }).join(',');
+      var sep = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent || '') ? '&' : '?';
+      out += '<h2 class="sec">Or tell them all at once</h2>';
+      out += '<a class="btn btn-secondary btn-block" href="' + esc('sms:' + numbers + sep + 'body=' + encodeURIComponent(groupBody)) + '" data-action="group-card">' +
+        ICONS.users + ' Group text to ' + groupTo.length + ' people</a>';
+      out += '<p class="helper" style="margin-top:10px;font-size:13px;">Opens one message to everyone who owes' +
+        (payerTag ? ', with ' + esc(payerTag) + ' as the text' : '') +
+        ', and puts a card on the clipboard listing what each of them owes — totals only, so nobody sees what anybody ate.' +
+        (noNumber.length ? ' ' + noNumber.map(function(p){ return esc(p.name); }).join(' and ') + ' ' +
+          (noNumber.length === 1 ? 'has' : 'have') + ' no number saved, so ' +
+          (noNumber.length === 1 ? 'they are' : 'they are') + ' left out.' : '') + '</p>';
+    }
+
     out += '<h2 class="sec">Or send one link to the group</h2>';
     var url = encodeShare(d);
     out += '<button class="link-copy" data-action="copy-link"><span>' + esc(url.replace(/^https?:\/\//, '')) + '</span>' + ICONS.link + '</button>';
@@ -2181,6 +2203,105 @@
     return c.toDataURL('image/png');
   }
 
+  // The card for a group chat: who owes what, and nothing about what anyone
+  // ate. Totals only keeps it short enough to read without opening, and keeps
+  // everyone's order to themselves.
+  function groupCardDataUrl(d, split){
+    var payer = (d.people || []).filter(function(x){ return x.id === d.payerId; })[0];
+    var tag = handleFor(payer);
+    var owing = split.people
+      .filter(function(p){ return p.id !== d.payerId; })
+      .sort(function(a, b){ return b.total - a.total; });
+    if (!owing.length) return null;
+    var owedBack = owing.reduce(function(a, p){ return a + p.total; }, 0);
+
+    var rowsTop = PAD + 92 + 52;
+    var footTop = rowsTop + owing.length * 78 + 24;
+    var H = footTop + 62 + (payer ? 70 : 0) + 74;
+
+    var c = document.createElement('canvas');
+    c.width = IMG_W; c.height = Math.round(H);
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#17120F';
+    ctx.fillRect(0, 0, c.width, c.height);
+
+    ctx.fillStyle = '#F6EDE0';
+    ctx.font = F.title;
+    ctx.fillText(d.place || 'The damage', PAD, PAD + 46);
+    ctx.fillStyle = '#A5947F';
+    ctx.font = F.sub;
+    ctx.fillText((d.date ? fmtDate(d.date) + '  ·  ' : '') + fmtMoney(split.total) +
+      (payer ? '  ·  ' + payer.name + ' paid' : ''), PAD, PAD + 90);
+
+    owing.forEach(function(p, i){
+      var top = rowsTop + i * 78;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(PAD + 28, top + 26, 28, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1A1109';
+      ctx.font = '700 22px "Helvetica Neue", Helvetica, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(initials(p.name), PAD + 28, top + 34);
+      ctx.textAlign = 'left';
+
+      ctx.fillStyle = '#F6EDE0';
+      ctx.font = F.name;
+      ctx.fillText(p.name, PAD + 76, top + 36);
+      ctx.font = F.money;
+      ctx.textAlign = 'right';
+      ctx.fillText(fmtMoney(p.total), IMG_W - PAD, top + 36);
+      ctx.textAlign = 'left';
+
+      ctx.strokeStyle = '#2A2119';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(PAD, top + 62);
+      ctx.lineTo(IMG_W - PAD, top + 62);
+      ctx.stroke();
+    });
+
+    ctx.fillStyle = '#A5947F';
+    ctx.font = F.name;
+    ctx.fillText(payer ? 'Owed to ' + payer.name : 'Owed back', PAD, footTop + 34);
+    ctx.fillStyle = '#F6EDE0';
+    ctx.font = F.big;
+    ctx.textAlign = 'right';
+    ctx.fillText(fmtMoney(owedBack), IMG_W - PAD, footTop + 34);
+    ctx.textAlign = 'left';
+
+    if (payer){
+      ctx.fillStyle = '#E0A458';
+      ctx.font = F.name;
+      ctx.fillText(tag ? 'Pay ' + payer.name + ' · Venmo ' + tag : 'Settle up with ' + payer.name, PAD, footTop + 96);
+    }
+
+    ctx.fillStyle = '#6A5A48';
+    ctx.font = F.mark;
+    ctx.fillText('The Damage', PAD, c.height - 30);
+    return c.toDataURL('image/png');
+  }
+
+  // Same trick as the per-person button: start the clipboard write inside the
+  // click and let the link's own navigation open Messages.
+  function copyGroupCard(){
+    var d = D();
+    var dataUrl = groupCardDataUrl(d, computeSplit(d));
+    if (!dataUrl) return;
+    if (!(navigator.clipboard && window.ClipboardItem)){
+      showToast('Opening a group text — the picture needs a newer iOS');
+      return;
+    }
+    try{
+      navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': fetch(dataUrl).then(function(r){ return r.blob(); }) })
+      ]).then(function(){ showToast('Card copied — paste it into the message'); },
+              function(){ showToast('Could not copy the card — the text is still ready'); });
+    }catch(e){
+      showToast('Could not copy the card — the text is still ready');
+    }
+  }
+
   function dataUrlToFile(dataUrl, name){
     var bin = atob(dataUrl.split(',')[1]);
     var arr = new Uint8Array(bin.length);
@@ -2443,7 +2564,8 @@
       }
       case 'share-link': shareResult(); break;
       case 'share-image': shareSplitImage(id); break;
-      case 'pic-then-text': copyImageThenText(id); break;   // no preventDefault: the link still opens Messages
+      case 'pic-then-text': copyImageThenText(id); break;
+      case 'group-card': copyGroupCard(); break;   // no preventDefault: the link still opens Messages   // no preventDefault: the link still opens Messages
 
       case 'leave-shared':
         sharedView = null;
