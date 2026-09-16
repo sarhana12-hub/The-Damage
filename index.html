@@ -97,6 +97,28 @@
   .resume-card .t{font-weight:650;}
   .resume-card .s{color:var(--ink-dim);font-size:12.5px;margin-top:2px;}
 
+  .home-top{display:flex;justify-content:flex-end;padding:12px 14px 0;}
+
+  /* ---------- prefixed + paired inputs ---------- */
+  .prefix-field{display:flex;align-items:center;background:var(--bg-lift);border:1px solid var(--border);border-radius:12px;padding-left:13px;}
+  .prefix-field:focus-within{outline:2px solid var(--brass-deep);outline-offset:1px;border-color:transparent;}
+  .prefix-field .prefix{color:var(--ink-dim);font-weight:650;}
+  .prefix-field input{flex:1;min-width:0;background:none;border:none;padding:13px 13px 13px 2px;}
+  .prefix-field input:focus{outline:none;}
+
+  /* ---------- send list ---------- */
+  .send-row{display:flex;align-items:center;gap:11px;padding:12px 14px;border-bottom:1px solid var(--border-soft);}
+  .send-row:last-child{border-bottom:none;}
+  .send-row .grow{flex:1;min-width:0;}
+  .send-row .nm{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .send-row .sm{color:var(--ink-dim);font-size:12px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .send-row .amt{font-weight:700;font-size:15px;}
+  .send-btn{border:none;border-radius:999px;padding:9px 15px;font-size:13px;font-weight:700;cursor:pointer;background:var(--brass);color:var(--on-brass);
+    display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;text-decoration:none;}
+  .send-btn:active{transform:scale(.97);}
+  .send-btn.alt{background:var(--card-2);color:var(--ink);border:1px solid var(--border);}
+  .you-tag{background:var(--sage-soft);color:var(--sage);border:1px solid rgba(143,176,138,.3);border-radius:6px;padding:1px 6px;font-size:10.5px;font-weight:750;text-transform:uppercase;letter-spacing:.4px;}
+
   /* ---------- avatars ---------- */
   .av{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:750;letter-spacing:.2px;color:#1A1109;flex:0 0 auto;}
   .av-sm{width:22px;height:22px;font-size:9.5px;}
@@ -215,6 +237,9 @@
     link: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>',
     share: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3"></path><polyline points="7 8 12 3 17 8"></polyline><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5"></path></svg>',
     paste: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1"></rect></svg>',
+    send: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>',
+    copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
+    phone: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>',
     users: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
     warn: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
     mark: '<svg width="60" height="60" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6h24v32l-4-2.4-4 2.4-4-2.4-4 2.4-4-2.4L12 38z"></path><line x1="18" y1="16" x2="30" y2="16"></line><line x1="18" y1="22" x2="30" y2="22"></line><line x1="18" y1="28" x2="25" y2="28"></line></svg>'
@@ -350,7 +375,8 @@
 
   /* ---------------- state ---------------- */
   function defaultUi(){ return { view:'home', sheet:null, open:{}, editing:false }; }
-  function defaultState(){ return { roster: [], dinner: null, ui: defaultUi() }; }
+  function defaultSettings(){ return { venmo: '' }; }
+  function defaultState(){ return { roster: [], dinner: null, settings: defaultSettings(), ui: defaultUi() }; }
 
   function load(){
     try{
@@ -360,6 +386,7 @@
         if (parsed && Array.isArray(parsed.roster)){
           if (!parsed.ui) parsed.ui = defaultUi();
           if (!parsed.ui.open) parsed.ui.open = {};
+          if (!parsed.settings) parsed.settings = defaultSettings();
           // An open sheet is a moment, not a place. Coming back to the app
           // should never restore a half-finished dialog over the top.
           parsed.ui.sheet = null;
@@ -376,7 +403,7 @@
 
   function save(){
     try{
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ roster: state.roster, dinner: state.dinner, ui: state.ui }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ roster: state.roster, dinner: state.dinner, settings: state.settings, ui: state.ui }));
     }catch(e){}
   }
 
@@ -395,9 +422,46 @@
     if (!clean) return null;
     var existing = state.roster.filter(function(p){ return p.name.toLowerCase() === clean.toLowerCase(); })[0];
     if (existing) return existing;
-    var person = { id: uid(), name: clean, color: nextColor() };
+    var person = { id: uid(), name: clean, color: nextColor(), phone: '' };
     state.roster.push(person);
     return person;
+  }
+
+  /* ---------------- reaching people ----------------
+     Phone numbers and the Venmo handle live only in localStorage on this
+     device. The handle is deliberately put into a shared breakdown — that is
+     the point of it — but a phone number never is: see encodeShare, which
+     copies only names and colours. */
+
+  function venmoTag(){
+    var v = String((state.settings && state.settings.venmo) || '').trim().replace(/^@+/, '');
+    return v ? '@' + v : '';
+  }
+  // Keep digits, and a leading + for international numbers. Everything a
+  // person might type around them — spaces, dashes, brackets — is noise.
+  function cleanPhone(raw){
+    var s = String(raw || '').trim();
+    var plus = s.charAt(0) === '+';
+    var digits = s.replace(/\D/g, '');
+    return digits ? (plus ? '+' : '') + digits : '';
+  }
+  function prettyPhone(raw){
+    var s = cleanPhone(raw);
+    var m = s.match(/^(\+1)?(\d{3})(\d{3})(\d{4})$/);
+    return m ? (m[1] ? m[1] + ' ' : '') + '(' + m[2] + ') ' + m[3] + '-' + m[4] : s;
+  }
+  // iOS wants the body parameter joined with "&" even when it is the only one;
+  // everywhere else follows RFC 5724 and uses "?".
+  function smsHref(phone, body){
+    var sep = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent || '') ? '&' : '?';
+    return 'sms:' + cleanPhone(phone) + sep + 'body=' + encodeURIComponent(body);
+  }
+  function oweMessage(d, p, url){
+    var tag = venmoTag();
+    var where = d.place ? d.place : 'dinner';
+    var when = d.date ? ' (' + fmtDate(d.date) + ')' : '';
+    return 'You owe ' + (tag ? tag + ' ' : '') + fmtMoney(p.total) + ' for ' + where + when +
+      '. Here is the itemised breakdown: ' + url;
   }
 
   function newDinner(){
@@ -775,7 +839,10 @@
     return new TextDecoder().decode(bytes);
   }
 
-  function encodeShare(d){
+  // `youIndex` personalises the link for one recipient: their row opens first
+  // and is marked as theirs. It rides after a dot, which base64url never
+  // produces, so the payload itself needs no escaping.
+  function encodeShare(d, youIndex){
     var order = {};
     (d.people || []).forEach(function(p, i){ order[p.id] = i; });
     var itemsSum = (d.items || []).reduce(function(a, it){ return a + (it.cents || 0); }, 0);
@@ -784,6 +851,9 @@
       pl: d.place || '',
       dt: d.date || '',
       py: d.payerId != null && order[d.payerId] != null ? order[d.payerId] : -1,
+      vm: venmoTag(),
+      // Names and colours only. A phone number is for this device to dial,
+      // never for a link that will be forwarded around a group chat.
       pe: (d.people || []).map(function(p){
         var ci = PERSON_COLORS.indexOf(p.color);
         return [p.name, ci >= 0 ? ci : p.color];
@@ -795,13 +865,17 @@
       tp: effectiveTip(d, itemsSum),
       tt: d.total != null ? d.total : null
     };
-    return APP_URL + 'index.html#s=' + b64urlEncode(JSON.stringify(payload));
+    var frag = b64urlEncode(JSON.stringify(payload));
+    if (youIndex != null && youIndex >= 0) frag += '.' + youIndex;
+    return APP_URL + 'index.html#s=' + frag;
   }
 
   // Rehydrates into the same shape computeSplit and the result view already
   // understand, so a shared link renders through exactly one code path.
   function decodeShare(frag){
-    var raw = JSON.parse(b64urlDecode(frag));
+    var dot = frag.indexOf('.');
+    var youIndex = dot >= 0 ? parseInt(frag.slice(dot + 1), 10) : -1;
+    var raw = JSON.parse(b64urlDecode(dot >= 0 ? frag.slice(0, dot) : frag));
     if (!raw || raw.v !== 1 || !Array.isArray(raw.pe) || !Array.isArray(raw.it)) throw new Error('bad payload');
     var people = raw.pe.map(function(p, i){
       var color = typeof p[1] === 'number' ? (PERSON_COLORS[p[1]] || PERSON_COLORS[0]) : String(p[1] || PERSON_COLORS[0]);
@@ -811,6 +885,8 @@
       id: 'shared',
       place: String(raw.pl || ''),
       date: String(raw.dt || ''),
+      venmo: String(raw.vm || ''),
+      youId: people[youIndex] ? people[youIndex].id : null,
       people: people,
       payerId: raw.py >= 0 && people[raw.py] ? people[raw.py].id : null,
       items: raw.it.map(function(it){
@@ -831,7 +907,7 @@
   }
 
   /* ---------------- view helpers ---------------- */
-  var BACK = { capture:'home', items:'capture', people:'items', assign:'people', result:'assign', roster:'home', howto:'home' };
+  var BACK = { capture:'home', items:'capture', people:'items', assign:'people', result:'assign', roster:'home', howto:'home', settings:'home' };
   var STEPS = ['capture','items','people','assign','result'];
 
   function avatar(p, cls){
@@ -867,7 +943,8 @@
 
   /* ---------------- home ---------------- */
   function renderHome(){
-    var out = '<div class="body">';
+    var out = '<div class="home-top"><button class="icon-btn" data-action="go" data-view="settings" aria-label="Settings" title="Settings">' + ICONS.gear + '</button></div>';
+    out += '<div class="body">';
     out += '<div class="hero"><div class="mark" style="color:var(--brass)">' + ICONS.mark + '</div>' +
       '<h1>The Damage</h1>' +
       '<p>Dinner is over and it all went on one card. Sort out who owes what — down to the penny.</p></div>';
@@ -888,6 +965,26 @@
     out += '<button class="btn btn-secondary btn-block" data-action="go" data-view="roster">' + ICONS.users + ' Who you dine with</button>';
     out += '<button class="btn btn-ghost btn-block" data-action="go" data-view="howto">' + ICONS.share + ' Set up one-tap scanning</button>';
     out += '</div>';
+    out += '</div>';
+    return out;
+  }
+
+  /* ---------------- settings ---------------- */
+  function renderSettings(){
+    var v = (state.settings && state.settings.venmo) || '';
+    var out = topbar('Settings', null, 'home');
+    out += '<div class="body">';
+    out += '<h2 class="sec" style="margin-top:6px;">Getting paid back</h2>';
+    out += '<div class="card">';
+    out += '<div class="field" style="margin:0;"><label for="venmo">Your Venmo handle</label>' +
+      '<div class="prefix-field"><span class="prefix">@</span>' +
+      '<input id="venmo" type="text" data-bind="venmo" value="' + esc(v.replace(/^@+/, '')) + '" placeholder="your-handle" autocapitalize="none" autocorrect="off" spellcheck="false"></div></div>';
+    out += '</div>';
+    out += '<p class="helper">Each person gets a message telling them what they owe and where to send it. The handle goes in that message and in the shared breakdown — your phone numbers never do, they stay on this device.</p>';
+
+    out += '<h2 class="sec">Phone numbers</h2>';
+    out += '<p class="helper" style="margin-bottom:10px;">Add a number to anyone you split with and their message can be sent straight from Messages, already written.</p>';
+    out += '<button class="btn btn-secondary btn-block" data-action="go" data-view="roster">' + ICONS.users + ' Who you dine with</button>';
     out += '</div>';
     return out;
   }
@@ -1086,7 +1183,9 @@
     var out = '<div class="person-card ' + (open ? 'open' : '') + '">';
     out += '<button class="person-head" data-action="toggle-open" data-id="' + p.id + '">' +
       avatar(p, 'av-lg') +
-      '<span><span class="nm">' + esc(p.name) + (isPayer ? ' <span class="payer-tag">paid</span>' : '') + '</span>' +
+      '<span><span class="nm">' + esc(p.name) +
+      (isPayer ? ' <span class="payer-tag">paid</span>' : '') +
+      (d.youId === p.id ? ' <span class="you-tag">you</span>' : '') + '</span>' +
       '<span class="sm">' + esc(verb) + '</span></span>' +
       '<span class="amt money">' + fmtMoney(p.total) + '</span>' +
       '<span class="chev">' + ICONS.chev + '</span></button>';
@@ -1142,10 +1241,41 @@
     out += '<h2 class="sec">How it adds up</h2>';
     out += summaryCard(split);
 
-    out += '<h2 class="sec">Send it round</h2>';
+    out += '<h2 class="sec">Tell everyone what they owe</h2>';
+    if (!venmoTag()){
+      out += '<div class="note">Add your Venmo handle and each message will say exactly where to send the money. ' +
+        '<button class="link-btn" style="padding:4px 0;display:block" data-action="go" data-view="settings">Add your handle &rarr;</button></div>';
+    }
+
+    // The payer is the one owed, so they are not on this list. Order matches
+    // the cards above so the two read as the same list.
+    var owing = ranked.filter(function(p){ return p.id !== d.payerId; });
+    if (!owing.length){
+      out += '<div class="empty">Nobody to chase — everyone here is the one who paid.</div>';
+    } else {
+      out += '<div class="card card-flush">' + owing.map(function(p){
+        var who = person(p.id) || {};
+        var phone = cleanPhone(who.phone);
+        var idx = d.people.map(function(x){ return x.id; }).indexOf(p.id);
+        var msg = oweMessage(d, p, encodeShare(d, idx));
+        var sub = phone ? prettyPhone(phone) : 'No number saved';
+        return '<div class="send-row">' + avatar(p) +
+          '<div class="grow"><div class="nm">' + esc(p.name) + '</div><div class="sm">' + esc(sub) + '</div></div>' +
+          '<div class="amt money">' + fmtMoney(p.total) + '</div>' +
+          (phone
+            ? '<a class="send-btn" href="' + esc(smsHref(phone, msg)) + '">' + ICONS.send + ' Text</a>'
+            : '<button class="send-btn alt" data-action="copy-message" data-id="' + p.id + '">' + ICONS.copy + ' Copy</button>') +
+          '</div>';
+      }).join('') + '</div>';
+      out += '<p class="helper" style="margin-top:10px;font-size:13px;">Each message is written for that person — what they owe' +
+        (venmoTag() ? ', that it goes to ' + esc(venmoTag()) : '') + ', and a link that opens on their share of the bill. ' +
+        'Numbers are saved against a name in <button class="link-btn" style="padding:0" data-action="go" data-view="roster">who you dine with</button>.</p>';
+    }
+
+    out += '<h2 class="sec">Or send one link to the group</h2>';
     var url = encodeShare(d);
     out += '<button class="link-copy" data-action="copy-link"><span>' + esc(url.replace(/^https?:\/\//, '')) + '</span>' + ICONS.link + '</button>';
-    out += '<p class="helper" style="margin-top:10px;font-size:13px;">The whole breakdown is packed into that link. Anyone can open it — no app, no account, nothing stored anywhere.</p>';
+    out += '<p class="helper" style="margin-top:10px;font-size:13px;">The whole breakdown is packed into that link. Anyone can open it — no app, no account, nothing stored anywhere. Phone numbers are never part of it.</p>';
     out += '</div>';
 
     out += footbar(
@@ -1164,8 +1294,22 @@
 
     var out = '<div class="topbar"><div><h1>' + esc(d.place || 'The damage') + '</h1>' +
       '<div class="sub">' + (d.date ? esc(fmtDate(d.date)) + ' · ' : '') + fmtMoney(split.total) + '</div></div></div>';
+    var you = d.youId ? d.people.filter(function(p){ return p.id === d.youId; })[0] : null;
+    var yourShare = you ? split.people.filter(function(p){ return p.id === you.id; })[0] : null;
+
     out += '<div class="body">';
-    out += '<div class="note">Someone shared this breakdown with you' + (payer ? '. ' + esc(payer.name) + ' put it all on one card' : '') + '. Tap a name to see the detail.</div>';
+    if (yourShare){
+      // The link was addressed to one person, so lead with their number
+      // rather than making them hunt for their own name in the list.
+      out += '<div class="note" style="text-align:center;padding:18px 16px;">' +
+        '<div style="color:var(--ink-soft);font-size:13.5px;">' + esc(you.name) + ', you owe' + (payer ? ' ' + esc(payer.name) : '') + '</div>' +
+        '<div class="money" style="font-size:34px;font-weight:750;margin:6px 0 2px;">' + fmtMoney(yourShare.total) + '</div>' +
+        (d.venmo ? '<div style="color:var(--brass);font-weight:700;">Venmo ' + esc(d.venmo) + '</div>' : '') +
+        '</div>';
+    } else {
+      out += '<div class="note">Someone shared this breakdown with you' + (payer ? '. ' + esc(payer.name) + ' put it all on one card' : '') + '. Tap a name to see the detail.' +
+        (d.venmo ? ' Send it to <b>' + esc(d.venmo) + '</b> on Venmo.' : '') + '</div>';
+    }
     out += ranked.map(function(p){ return personCard(p, d); }).join('');
     out += '<h2 class="sec">How it adds up</h2>';
     out += summaryCard(split);
@@ -1184,10 +1328,12 @@
       out += '<div class="empty">No one saved yet.</div>';
     } else {
       out += state.roster.map(function(p){
-        return '<div class="row">' + avatar(p) +
+        return '<div class="row" style="flex-wrap:wrap;">' + avatar(p) +
           '<div class="grow"><input class="ename" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-lift)" type="text" data-bind="roster-name" data-id="' + p.id + '" value="' + esc(p.name) + '" aria-label="Name"></div>' +
           '<button class="icon-btn" data-action="cycle-color" data-id="' + p.id + '" aria-label="Change colour for ' + esc(p.name) + '">' + ICONS.edit + '</button>' +
           '<button class="icon-btn" data-action="del-person" data-id="' + p.id + '" aria-label="Remove ' + esc(p.name) + '">' + ICONS.trash + '</button>' +
+          '<div class="prefix-field" style="flex:1 0 100%;margin-left:42px;"><span class="prefix">' + ICONS.phone + '</span>' +
+          '<input type="tel" inputmode="tel" data-bind="roster-phone" data-id="' + p.id + '" value="' + esc(p.phone || '') + '" placeholder="Mobile number (optional)" aria-label="Mobile number for ' + esc(p.name) + '"></div>' +
           '</div>';
       }).join('');
     }
@@ -1281,6 +1427,8 @@
         '<p class="sub">They will be saved for next time.</p>' +
         '<form id="add-person-form" autocomplete="off">' +
         '<div class="field"><input id="new-person" type="text" class="text-input" placeholder="Name" autocapitalize="words" maxlength="24"></div>' +
+        '<div class="field"><div class="prefix-field"><span class="prefix">' + ICONS.phone + '</span>' +
+        '<input id="new-person-phone" type="tel" inputmode="tel" placeholder="Mobile number (optional)"></div></div>' +
         '<div class="sheet-actions" style="margin-top:4px;">' +
         '<button type="button" class="btn btn-secondary" data-action="close-sheet">Cancel</button>' +
         '<button type="submit" class="btn btn-primary">Add</button>' +
@@ -1309,9 +1457,11 @@
     if (!input) return;
     var p = rosterAdd(input.value);
     if (!p){ state.ui.sheet = null; render(); return; }
+    var phoneField = document.getElementById('new-person-phone');
+    if (phoneField && phoneField.value.trim()) p.phone = phoneField.value.trim();
     var target = state.ui.sheet && state.ui.sheet.target;
     if (target === 'people' && D() && !D().people.some(function(x){ return x.id === p.id; })){
-      D().people.push({ id: p.id, name: p.name, color: p.color });
+      D().people.push({ id: p.id, name: p.name, color: p.color, phone: p.phone || '' });
       if (!D().payerId) D().payerId = p.id;
     }
     state.ui.sheet = null;
@@ -1334,6 +1484,7 @@
         case 'result':  html = D() ? renderResult() : renderHome(); break;
         case 'roster':  html = renderRoster(); break;
         case 'howto':   html = renderHowto(); break;
+        case 'settings': html = renderSettings(); break;
         default:        html = renderHome();
       }
     }
@@ -1393,7 +1544,7 @@
       });
       if (d.payerId === id) d.payerId = d.people.length ? d.people[0].id : null;
     } else {
-      d.people.push({ id: p.id, name: p.name, color: p.color });
+      d.people.push({ id: p.id, name: p.name, color: p.color, phone: p.phone || '' });
       if (!d.payerId) d.payerId = p.id;
     }
     save();
@@ -1533,6 +1684,17 @@
       case 'copy-link':
         copyToClipboard(encodeShare(D())).then(function(){ showToast('Link copied'); }, function(){ showToast('Could not copy the link'); });
         break;
+      case 'copy-message': {
+        // The same words the text message would have carried, for someone
+        // whose number is not saved — paste it wherever you talk to them.
+        var split = computeSplit(d);
+        var share = split.people.filter(function(x){ return x.id === id; })[0];
+        if (!share) break;
+        var at = d.people.map(function(x){ return x.id; }).indexOf(id);
+        copyToClipboard(oweMessage(d, share, encodeShare(d, at)))
+          .then(function(){ showToast('Message for ' + share.name + ' copied'); }, function(){ showToast('Could not copy'); });
+        break;
+      }
       case 'share-link': shareResult(); break;
       case 'copy-scheme':
         copyToClipboard(APP_URL + 'index.html#t=').then(function(){ showToast('Address copied'); }, function(){ showToast('Could not copy'); });
@@ -1605,6 +1767,19 @@
         }
         break;
       }
+      case 'roster-phone': {
+        var rq = state.roster.filter(function(x){ return x.id === id; })[0];
+        if (rq){
+          rq.phone = el.value;
+          // Keep the current dinner's copy in step, so a number added midway
+          // through a split is usable on the result screen straight away.
+          if (d) d.people.forEach(function(x){ if (x.id === id) x.phone = el.value; });
+        }
+        break;
+      }
+      case 'venmo':
+        state.settings.venmo = el.value;
+        break;
     }
   });
   document.addEventListener('change', function(e){
@@ -1631,6 +1806,9 @@
     if (hash.indexOf('#s=') === 0){
       try{
         sharedView = decodeShare(hash.slice(3));
+        // A link addressed to one person opens on their detail, so they can
+        // see what they are being asked to pay for without tapping anything.
+        if (sharedView.youId) state.ui.open[sharedView.youId] = true;
       }catch(err){
         sharedView = null;
         showToast('That shared link is damaged');
