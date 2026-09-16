@@ -124,6 +124,7 @@
     display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;text-decoration:none;}
   .send-btn:active{transform:scale(.97);}
   .send-btn.alt{background:var(--card-2);color:var(--ink);border:1px solid var(--border);}
+  .send-btn.pic{padding:9px 11px;}
   .you-tag{background:var(--sage-soft);color:var(--sage);border:1px solid rgba(143,176,138,.3);border-radius:6px;padding:1px 6px;font-size:10.5px;font-weight:750;text-transform:uppercase;letter-spacing:.4px;}
 
   /* ---------- avatars ---------- */
@@ -1060,6 +1061,13 @@
     out += '<div class="field" style="margin:0;"><label for="venmo">Your Venmo handle</label>' +
       '<div class="prefix-field"><span class="prefix">@</span>' +
       '<input id="venmo" type="text" data-bind="venmo" value="' + esc(v.replace(/^@+/, '')) + '" placeholder="your-handle" autocapitalize="none" autocorrect="off" spellcheck="false"></div></div>';
+    // Easy trap to fall into: a handle is only ever quoted for the person who
+    // paid, so until the app knows which of these people is you, yours is
+    // never used and nothing says why.
+    if (v.trim() && !state.settings.meId){
+      out += '<div class="tiechip off" style="margin-top:12px;">' + ICONS.warn +
+        '<span>This handle will not be used until you say which of the people below is you.</span></div>';
+    }
     out += '</div>';
     out += '<p class="helper">Used when <b>you</b> picked up the check. When somebody else paid, their handle is quoted instead — set that against their name in <button class="link-btn" style="padding:0" data-action="go" data-view="roster">who you dine with</button>. A handle only ever goes into <b>messages you send</b>, never into the shared link, which can be forwarded on to people you never picked. Phone numbers never leave this device at all.</p>';
 
@@ -1585,20 +1593,20 @@
           '<div class="grow"><div class="nm">' + esc(p.name) + (isPayer ? ' <span class="payer-tag">paid</span>' : '') + '</div>' +
           '<div class="sm">' + esc(sub) + '</div></div>' +
           '<div class="amt money">' + fmtMoney(amount) + '</div>' +
+          // Their own card, with nobody else's share on it.
+          '<button class="send-btn alt pic" data-action="share-image" data-id="' + p.id + '" aria-label="Send ' + esc(p.name) + ' a picture of their share">' + ICONS.image + '</button>' +
           (phone
             ? '<a class="send-btn' + (isPayer ? ' alt' : '') + '" href="' + esc(smsHref(phone, msg)) + '">' + ICONS.send + ' Text</a>'
             : '<button class="send-btn alt" data-action="copy-message" data-id="' + p.id + '">' + ICONS.copy + ' Copy</button>') +
           '</div>';
       }).join('') + '</div>';
-      out += '<p class="helper" style="margin-top:10px;font-size:13px;">Send as many or as few as you like — each one is separate. The message lists that person&rsquo;s own items and their share of tax and tip' +
+      out += '<p class="helper" style="margin-top:10px;font-size:13px;">Send as many or as few as you like — each one is separate. The picture button makes a card for that person alone. The message lists that person&rsquo;s own items and their share of tax and tip' +
         (payerTag ? ', and ends with ' + esc(payerTag) : '') +
         ', so there is nothing to open and no link to wade through. ' +
         'Numbers and handles are saved against a name in <button class="link-btn" style="padding:0" data-action="go" data-view="roster">who you dine with</button>.</p>';
     }
 
-    out += '<h2 class="sec">Or send the whole table at once</h2>';
-    out += '<button class="btn btn-secondary btn-block" data-action="share-image">' + ICONS.image + ' Send it as a picture</button>';
-    out += '<p class="helper" style="margin-top:10px;font-size:13px;">A receipt card with everyone on it — the thing to drop into a group chat. Nothing to tap and nothing to install.</p>';
+    out += '<h2 class="sec">Or send one link to the group</h2>';
     var url = encodeShare(d);
     out += '<button class="link-copy" data-action="copy-link"><span>' + esc(url.replace(/^https?:\/\//, '')) + '</span>' + ICONS.link + '</button>';
     out += '<p class="helper" style="margin-top:10px;font-size:13px;">The whole breakdown is packed into that link. Anyone can open it — no app, no account, nothing stored anywhere. Neither your Venmo handle nor anyone&rsquo;s phone number is in it, so a link that gets forwarded on gives away nothing but the dinner.</p>';
@@ -2005,130 +2013,95 @@
     ctx.closePath();
   }
 
+  // One card per person, showing their items and their total and nothing
+  // about anybody else — what Lexi owes is no business of Cy's.
+  //
   // Built in one synchronous pass so it can be handed to navigator.share
   // inside the click that asked for it — iOS will not share from a callback
   // that lands after the gesture has expired.
-  function splitImageDataUrl(d, split){
-    var ranked = split.people.slice().sort(function(a, b){ return b.total - a.total; });
+  function personImageDataUrl(d, split, personId){
+    var p = split.people.filter(function(x){ return x.id === personId; })[0];
+    if (!p) return null;
     var payer = (d.people || []).filter(function(x){ return x.id === d.payerId; })[0];
     var tag = handleFor(payer);
+    var isPayer = payer && p.id === payer.id;
+    var owedBack = split.people.reduce(function(a, x){ return a + (x.id === d.payerId ? 0 : x.total); }, 0);
 
-    // Measure first: each person costs a header plus a line per item.
-    var rowTops = [], y = PAD + 72 + 46;
-    ranked.forEach(function(p){
-      rowTops.push(y);
-      y += 92 + (p.lines.length + (p.tax ? 1 : 0) + (p.tip ? 1 : 0) + (p.adj ? 1 : 0)) * 38 + 26;
-    });
-    var summaryTop = y + 14;
-    var H = summaryTop + 40 + 4 * 46 + 40 + (tag ? 56 : 0) + 74;
+    var detailCount = p.lines.length + (p.tax ? 1 : 0) + (p.tip ? 1 : 0) + (p.adj ? 1 : 0);
+    // The headline amount is 88px tall; the items need clear air beneath it,
+    // plus a little more when the payer gets an extra line of explanation.
+    var itemsTop = PAD + 92 + 212 + (isPayer ? 42 : 0);
+    var totalTop = itemsTop + detailCount * 42 + 30;
+    var H = totalTop + 66 + (payer ? 72 : 0) + 74;
 
     var c = document.createElement('canvas');
     c.width = IMG_W; c.height = Math.round(H);
     var ctx = c.getContext('2d');
-
     ctx.fillStyle = '#17120F';
     ctx.fillRect(0, 0, c.width, c.height);
 
     ctx.fillStyle = '#F6EDE0';
     ctx.font = F.title;
-    ctx.textBaseline = 'alphabetic';
     ctx.fillText(d.place || 'The damage', PAD, PAD + 46);
     ctx.fillStyle = '#A5947F';
     ctx.font = F.sub;
-    ctx.fillText((d.date ? fmtDate(d.date) + '  ·  ' : '') + fmtMoney(split.total) +
-      (payer ? '  ·  ' + payer.name + ' paid' : ''), PAD, PAD + 90);
+    ctx.fillText(d.date ? fmtDate(d.date) : '', PAD, PAD + 90);
 
-    ranked.forEach(function(p, i){
-      var top = rowTops[i];
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(PAD + 32, top + 30, 32, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#1A1109';
-      ctx.font = '700 24px "Helvetica Neue", Helvetica, Arial, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(initials(p.name), PAD + 32, top + 39);
-      ctx.textAlign = 'left';
-
-      ctx.fillStyle = '#F6EDE0';
-      ctx.font = F.name;
-      ctx.fillText(p.name, PAD + 84, top + 40);
-      // Without this the person who covered the whole bill just looks like
-      // another debtor, which is the opposite of the truth.
-      if (payer && p.id === payer.id){
-        var bx = PAD + 96 + ctx.measureText(p.name).width, by = top + 10, bw = 80, bh = 34;
-        ctx.fillStyle = 'rgba(224,164,88,.18)';
-        roundRect(ctx, bx, by, bw, bh, 9);
-        ctx.fill();
-        ctx.fillStyle = '#E0A458';
-        ctx.font = '700 20px "Helvetica Neue", Helvetica, Arial, sans-serif';
-        ctx.fillText('PAID', bx + 15, by + 24);
-      }
-      // Reset: the badge above changes the fill, and every amount should read
-      // the same regardless of who happened to pay.
-      ctx.fillStyle = '#F6EDE0';
-      ctx.font = F.money;
-      ctx.textAlign = 'right';
-      ctx.fillText(fmtMoney(p.total), IMG_W - PAD, top + 40);
-      ctx.textAlign = 'left';
-
-      var ly = top + 86;
+    // The headline: who owes whom, in words, before any numbers.
+    ctx.fillStyle = '#A5947F';
+    ctx.font = F.name;
+    ctx.fillText(
+      isPayer ? p.name + ' covered the bill' : p.name + ', you owe ' + (payer ? payer.name : 'whoever paid'),
+      PAD, PAD + 162);
+    ctx.fillStyle = isPayer ? '#8FB08A' : '#E0A458';
+    ctx.font = '700 88px SFMono-Regular, "SF Mono", Menlo, monospace';
+    ctx.fillText(fmtMoney(isPayer ? owedBack : p.total), PAD, PAD + 250);
+    if (isPayer){
       ctx.fillStyle = '#786959';
-      function detail(label, amount){
-        ctx.font = F.item;
-        ctx.fillText(label, PAD + 84, ly);
-        ctx.font = F.cash;
-        ctx.textAlign = 'right';
-        ctx.fillText(amount, IMG_W - PAD, ly);
-        ctx.textAlign = 'left';
-        ly += 38;
-      }
-      p.lines.forEach(function(l){
-        var note = l.split > 1 ? ' (' + (l.orphan ? 'shared' : '1/' + l.split) + ')' : '';
-        var label = (l.qty > 1 ? l.qty + '× ' : '') + l.name + note;
-        if (label.length > 42) label = label.slice(0, 41) + '…';
-        detail(label, fmtMoney(l.cents));
-      });
-      if (p.tax) detail('Tax', fmtMoney(p.tax));
-      if (p.tip) detail('Tip', fmtMoney(p.tip));
-      if (p.adj) detail('Share of the rest', fmtMoney(p.adj));
+      ctx.font = F.small;
+      ctx.fillText('owed back to you · your own share was ' + fmtMoney(p.total), PAD, PAD + 286);
+    }
 
-      ctx.strokeStyle = '#2A2119';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(PAD, ly - 4);
-      ctx.lineTo(IMG_W - PAD, ly - 4);
-      ctx.stroke();
-    });
-
-    var sy = summaryTop + 40;
-    function totalRow(label, amount, strong){
+    var ly = itemsTop + 40;
+    function detail(label, amount, strong){
       ctx.fillStyle = strong ? '#F6EDE0' : '#A5947F';
       ctx.font = strong ? F.name : F.item;
-      ctx.fillText(label, PAD, sy);
+      ctx.fillText(label, PAD, ly);
       ctx.font = strong ? F.big : F.cash;
       ctx.textAlign = 'right';
-      ctx.fillText(amount, IMG_W - PAD, sy);
+      ctx.fillText(amount, IMG_W - PAD, ly);
       ctx.textAlign = 'left';
-      sy += 46;
+      ly += 42;
     }
-    totalRow('Items', fmtMoney(split.itemsSum));
-    totalRow('Tax', fmtMoney(split.tax));
-    totalRow('Tip', fmtMoney(split.tip));
-    sy += 8;
-    totalRow('Total', fmtMoney(split.total), true);
+    p.lines.forEach(function(l){
+      var note = l.split > 1 ? ' (' + (l.orphan ? 'shared' : '1/' + l.split) + ' of ' + fmtMoney(l.full) + ')' : '';
+      var label = (l.qty > 1 ? l.qty + '× ' : '') + l.name + note;
+      if (label.length > 46) label = label.slice(0, 45) + '…';
+      detail(label, fmtMoney(l.cents));
+    });
+    if (p.tax) detail('Tax', fmtMoney(p.tax));
+    if (p.tip) detail('Tip', fmtMoney(p.tip));
+    if (p.adj) detail('Share of the rest', fmtMoney(p.adj));
 
-    if (tag){
+    ctx.strokeStyle = '#33291F';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(PAD, totalTop - 6);
+    ctx.lineTo(IMG_W - PAD, totalTop - 6);
+    ctx.stroke();
+
+    ly = totalTop + 40;
+    detail(isPayer ? 'Your share' : 'Your total', fmtMoney(p.total), true);
+
+    if (payer && !isPayer){
       ctx.fillStyle = '#E0A458';
       ctx.font = F.name;
-      ctx.fillText('Venmo ' + tag, PAD, sy + 18);
-      sy += 56;
+      ctx.fillText(tag ? 'Pay ' + payer.name + ' · Venmo ' + tag : 'Settle up with ' + payer.name, PAD, ly + 18);
     }
 
     ctx.fillStyle = '#6A5A48';
     ctx.font = F.mark;
     ctx.fillText('The Damage', PAD, c.height - 30);
-
     return c.toDataURL('image/png');
   }
 
@@ -2139,10 +2112,14 @@
     return new File([arr], name, { type: 'image/png' });
   }
 
-  function shareSplitImage(){
+  function shareSplitImage(personId){
     var d = D();
-    var dataUrl = splitImageDataUrl(d, computeSplit(d));
-    var name = ((d.place || 'the-damage').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'the-damage') + '.png';
+    var split = computeSplit(d);
+    var dataUrl = personImageDataUrl(d, split, personId);
+    if (!dataUrl) return;
+    var who = (split.people.filter(function(x){ return x.id === personId; })[0] || {}).name || 'share';
+    var slug = function(s){ return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
+    var name = (slug(who) || 'share') + '-' + (slug(d.place) || 'the-damage') + '.png';
     var file = dataUrlToFile(dataUrl, name);
     if (navigator.canShare && navigator.canShare({ files: [file] })){
       navigator.share({ files: [file] }).catch(function(){});
@@ -2336,7 +2313,7 @@
         break;
       }
       case 'share-link': shareResult(); break;
-      case 'share-image': shareSplitImage(); break;
+      case 'share-image': shareSplitImage(id); break;
 
       case 'leave-shared':
         sharedView = null;
