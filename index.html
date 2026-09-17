@@ -204,7 +204,9 @@
   .sheet-row{display:flex;align-items:center;gap:10px;width:100%;padding:12px 10px;border:none;background:none;border-radius:12px;cursor:pointer;text-align:left;}
   .sheet-row:active{background:var(--card-2);}
   .sheet-row.on{background:var(--brass-soft);}
-  .sheet-row .nm{flex:1;font-weight:600;}
+  .sheet-row .nm{flex:1;font-weight:600;min-width:0;}
+  .sheet-row .opt-sub{display:block;font-weight:400;font-size:12.5px;color:var(--ink-dim);margin-top:3px;line-height:1.35;}
+  a.sheet-row{text-decoration:none;color:inherit;}
   .sheet-row .tick{color:var(--brass);opacity:0;flex:0 0 auto;}
   .sheet-row.on .tick{opacity:1;}
   .sheet-actions{display:flex;gap:10px;margin-top:16px;}
@@ -1650,96 +1652,121 @@
         '</div>';
     }
 
-    out += '<h2 class="sec">' + (youPaid ? 'Tell everyone what they owe' : 'Pass it on to the others') + '</h2>';
-    if (payerP && !payerTag){
-      out += '<div class="note">Nobody is told where to send the money. Add ' +
-        (youPaid ? 'your Venmo handle' : esc(payerP.name) + '&rsquo;s Venmo handle') + ' and every message will say. ' +
-        '<button class="link-btn" style="padding:4px 0;display:block" data-action="go" data-view="' + (youPaid ? 'settings' : 'roster') + '">' +
-        (youPaid ? 'Add your handle' : 'Add it in who you dine with') + ' &rarr;</button></div>';
-    }
+    // Every way of sending this now lives behind one button. There used to be
+    // four places on this screen that started a share, and no way to tell from
+    // any of them what it would actually do.
+    out += footbar(
+      '<button class="btn btn-primary btn-block" data-action="sheet-share">' + ICONS.share + ' Share the breakdown</button>' +
+      '<button class="btn btn-secondary btn-block" style="margin-top:10px" data-action="finish-split">' + ICONS.check + ' Done — save this split</button>'
+    );
+    return out;
+  }
 
-    // Everyone in the party gets their own button — you send whichever ones
-    // you want, and nobody is messaged as a side effect of messaging someone
-    // else. The only person missing is you.
-    var contacts = ranked.filter(function(p){ return p.id !== state.settings.meId; });
-    if (!contacts.length){
-      out += '<div class="empty">Nobody to message — there is only you here.</div>';
-    } else {
-      out += '<div class="card card-flush">' + contacts.map(function(p){
-        var who = person(p.id) || {};
-        var phone = cleanPhone(who.phone);
-        var isPayer = p.id === d.payerId;
-        // The person who paid is owed, not owing, so they get the other half
-        // of the conversation.
-        var msg = (isPayer && yours) ? payerMessage(d, yours) : oweMessage(d, p);
-        // The picture already says what they owe and for what, so the message
-        // it travels with is stripped to the one thing worth having as text:
-        // the handle, sitting alone so it is easy to long-press and copy.
-        // A handle if there is one, otherwise who to settle with — and if
-        // nobody was marked as paying, at least the amount, because an image
-        // arriving with no words at all is worse than any of these.
-        var picMsg = (isPayer && yours)
-          ? payerMessage(d, yours)
-          : (payerTag
-              || (payerP ? 'Settle up with ' + payerP.name
-                         : 'Your share of ' + (d.place || 'dinner') + ': ' + fmtMoney(p.total)));
-        var amount = (isPayer && yours) ? yours.total : p.total;
-        var sub = isPayer && yours ? 'you owe them' : (phone ? prettyPhone(phone) : 'No number saved');
-        return '<div class="send-row">' + avatar(p) +
-          '<div class="grow"><div class="nm">' + esc(p.name) + (isPayer ? ' <span class="payer-tag">paid</span>' : '') + '</div>' +
-          '<div class="sm">' + esc(sub) + '</div></div>' +
-          '<div class="amt money">' + fmtMoney(amount) + '</div>' +
-          // Their own card, with nobody else's share on it. With a number on
-          // file this opens Messages addressed to them and puts the picture on
-          // the clipboard; without one it can only offer the share sheet.
-          (phone
-            ? '<a class="send-btn alt pic" href="' + esc(smsHref(phone, picMsg)) + '" data-action="pic-then-text" data-id="' + p.id + '" aria-label="Text ' + esc(p.name) + ' with their picture on the clipboard">' + ICONS.image + '</a>'
-            : '<button class="send-btn alt pic" data-action="share-image" data-id="' + p.id + '" aria-label="Send ' + esc(p.name) + ' a picture of their share">' + ICONS.image + '</button>') +
-          (phone
-            ? '<a class="send-btn' + (isPayer ? ' alt' : '') + '" href="' + esc(smsHref(phone, msg)) + '">' + ICONS.send + ' Text</a>'
-            : '<button class="send-btn alt" data-action="copy-message" data-id="' + p.id + '">' + ICONS.copy + ' Copy</button>') +
-          '</div>';
-      }).join('') + '</div>';
-      out += '<p class="helper" style="margin-top:10px;font-size:13px;">Send as many or as few as you like — each one is separate. ' +
-        '<b>Text</b> writes out their items in full. <b>The picture button</b> opens the same message with their card on the clipboard to paste, and sends just the handle as text so it is easy to copy — the card carries the detail. ' +
-        'The written message lists that person&rsquo;s own items and their share of tax and tip' +
-        (payerTag ? ', and ends with ' + esc(payerTag) : '') +
-        ', so there is nothing to open and no link to wade through. ' +
-        'Numbers and handles are saved against a name in <button class="link-btn" style="padding:0" data-action="go" data-view="roster">who you dine with</button>.</p>';
-    }
+  /* ---------------- the one share menu ---------------- */
 
-    // One message to everyone who owes, with a card of just the totals.
+  // Everyone in the party except you, ranked as on the cards above.
+  function sendContacts(d, split){
+    return split.people.slice()
+      .sort(function(a, b){ return b.total - a.total; })
+      .filter(function(p){ return p.id !== state.settings.meId; });
+  }
+
+  // The two messages a given person can be sent: the written one, and the
+  // short one that rides with their picture.
+  function messagesFor(d, split, p){
+    var payerP = (d.people || []).filter(function(x){ return x.id === d.payerId; })[0];
+    var payerTag = handleFor(payerP);
+    var mine = state.settings.meId
+      ? split.people.filter(function(x){ return x.id === state.settings.meId; })[0]
+      : null;
+    var isPayerRow = p.id === d.payerId && mine && mine.id !== d.payerId;
+    return {
+      written: isPayerRow ? payerMessage(d, mine) : oweMessage(d, p),
+      withPicture: isPayerRow
+        ? payerMessage(d, mine)
+        : (payerTag || (payerP ? 'Settle up with ' + payerP.name
+                               : 'Your share of ' + (d.place || 'dinner') + ': ' + fmtMoney(p.total))),
+      amount: isPayerRow ? mine.total : p.total,
+      isPayerRow: isPayerRow
+    };
+  }
+
+  function shareMenuSheet(){
+    var d = D();
+    if (!d) return '';
+    var split = computeSplit(d);
+    var payerP = person(d.payerId);
+    var payerTag = handleFor(payerP);
+    var youPaid = isMe(payerP);
+    var contacts = sendContacts(d, split);
     var groupTo = contacts.filter(function(p){
       return p.id !== d.payerId && cleanPhone((person(p.id) || {}).phone);
     });
-    var noNumber = contacts.filter(function(p){
-      return p.id !== d.payerId && !cleanPhone((person(p.id) || {}).phone);
-    });
+
+    var out = '<div class="grab"></div><h3>Share the breakdown</h3>' +
+      '<p class="sub">Every way of sending it, in one place.</p>';
+
+    if (payerP && !payerTag){
+      out += '<div class="note" style="margin-bottom:14px;">Nobody is told where to send the money. Add ' +
+        (youPaid ? 'your Venmo handle' : esc(payerP.name) + '&rsquo;s handle') +
+        ' and every message will say. ' +
+        '<button class="link-btn" style="padding:4px 0;display:block" data-action="go" data-view="' + (youPaid ? 'settings' : 'roster') + '">Add it &rarr;</button></div>';
+    }
+
+    out += '<button class="sheet-row" data-action="sheet-share-people">' + ICONS.send +
+      '<span class="nm">Text one person<span class="opt-sub">Their own items and what they owe</span></span>' +
+      '<span style="color:var(--ink-dim)">' + ICONS.chev + '</span></button>';
+
     if (groupTo.length > 1){
       var groupBody = payerTag || (payerP ? 'Settle up with ' + payerP.name : 'Here is what everyone owes');
       var numbers = groupTo.map(function(p){ return cleanPhone((person(p.id) || {}).phone); }).join(',');
       var sep = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent || '') ? '&' : '?';
-      out += '<h2 class="sec">Or tell them all at once</h2>';
-      out += '<a class="btn btn-secondary btn-block" href="' + esc('sms:' + numbers + sep + 'body=' + encodeURIComponent(groupBody)) + '" data-action="group-card">' +
-        ICONS.users + ' Group text to ' + groupTo.length + ' people</a>';
-      out += '<p class="helper" style="margin-top:10px;font-size:13px;">Opens one message to everyone who owes' +
-        (payerTag ? ', with ' + esc(payerTag) + ' as the text' : '') +
-        ', and puts a card on the clipboard showing what each of them owes and the items behind it.' +
-        (noNumber.length ? ' ' + noNumber.map(function(p){ return esc(p.name); }).join(' and ') + ' ' +
-          (noNumber.length === 1 ? 'has' : 'have') + ' no number saved, so ' +
-          (noNumber.length === 1 ? 'they are' : 'they are') + ' left out.' : '') + '</p>';
+      out += '<a class="sheet-row" href="' + esc('sms:' + numbers + sep + 'body=' + encodeURIComponent(groupBody)) + '" data-action="group-card">' + ICONS.users +
+        '<span class="nm">Text all ' + groupTo.length + ' who owe<span class="opt-sub">One message, with a card of everyone&rsquo;s share to paste</span></span></a>';
     }
 
-    out += '<h2 class="sec">Or send one link to the group</h2>';
-    var url = encodeShare(d);
-    out += '<button class="link-copy" data-action="copy-link"><span>' + esc(url.replace(/^https?:\/\//, '')) + '</span>' + ICONS.link + '</button>';
-    out += '<p class="helper" style="margin-top:10px;font-size:13px;">The whole breakdown is packed into that link. Anyone can open it — no app, no account, nothing stored anywhere. Neither your Venmo handle nor anyone&rsquo;s phone number is in it, so a link that gets forwarded on gives away nothing but the dinner.</p>';
-    out += '</div>';
+    out += '<button class="sheet-row" data-action="copy-link">' + ICONS.link +
+      '<span class="nm">Copy a link to the whole thing<span class="opt-sub">Opens in any browser — no app, no account</span></span></button>';
 
-    out += footbar(
-      '<button class="btn btn-primary btn-block" data-action="share-link">' + ICONS.share + ' Share the breakdown</button>' +
-      '<button class="btn btn-secondary btn-block" style="margin-top:10px" data-action="finish-split">' + ICONS.check + ' Done — save this split</button>'
-    );
+    if (navigator.share){
+      out += '<button class="sheet-row" data-action="share-link">' + ICONS.share +
+        '<span class="nm">Send that link somewhere<span class="opt-sub">Through the usual share sheet</span></span></button>';
+    }
+
+    out += '<div class="sheet-actions"><button class="btn btn-secondary" data-action="close-sheet">Close</button></div>';
+    return out;
+  }
+
+  function sharePeopleSheet(){
+    var d = D();
+    if (!d) return '';
+    var split = computeSplit(d);
+    var contacts = sendContacts(d, split);
+
+    var out = '<div class="grab"></div>' +
+      '<button class="back-btn" data-action="sheet-share">' + ICONS.chevL + ' All the ways</button>' +
+      '<h3>Text one person</h3>' +
+      '<p class="sub"><b>Text</b> writes their items out in full. <b>The picture</b> opens the same message with their card ready to paste, and sends just the handle as text.</p>';
+
+    out += contacts.map(function(p){
+      var who = person(p.id) || {};
+      var phone = cleanPhone(who.phone);
+      var m = messagesFor(d, split, p);
+      var sub = m.isPayerRow ? 'you owe them' : (phone ? prettyPhone(phone) : 'No number saved');
+      return '<div class="send-row" style="padding-left:6px;padding-right:6px;">' + avatar(p) +
+        '<div class="grow"><div class="nm">' + esc(p.name) + (m.isPayerRow ? ' <span class="payer-tag">paid</span>' : '') + '</div>' +
+        '<div class="sm">' + esc(sub) + '</div></div>' +
+        '<div class="amt money">' + fmtMoney(m.amount) + '</div>' +
+        (phone
+          ? '<a class="send-btn alt pic" href="' + esc(smsHref(phone, m.withPicture)) + '" data-action="pic-then-text" data-id="' + p.id + '" aria-label="Text ' + esc(p.name) + ' with their picture on the clipboard">' + ICONS.image + '</a>'
+          : '<button class="send-btn alt pic" data-action="share-image" data-id="' + p.id + '" aria-label="Send ' + esc(p.name) + ' a picture of their share">' + ICONS.image + '</button>') +
+        (phone
+          ? '<a class="send-btn" href="' + esc(smsHref(phone, m.written)) + '">' + ICONS.send + ' Text</a>'
+          : '<button class="send-btn alt" data-action="copy-message" data-id="' + p.id + '">' + ICONS.copy + ' Copy</button>') +
+        '</div>';
+    }).join('') || '<div class="empty">Nobody to message — there is only you here.</div>';
+
+    out += '<div class="sheet-actions"><button class="btn btn-secondary" data-action="close-sheet">Close</button></div>';
     return out;
   }
 
@@ -1879,6 +1906,9 @@
         '<button class="btn btn-primary btn-sm" data-action="close-sheet">Done</button>' +
         '</div>';
     }
+
+    if (s.type === 'share') inner = shareMenuSheet();
+    if (s.type === 'sharePeople') inner = sharePeopleSheet();
 
     if (s.type === 'addPerson'){
       inner = '<div class="grab"></div>' +
@@ -2600,6 +2630,8 @@
         break;
 
       case 'to-result': go('result'); break;
+      case 'sheet-share': state.ui.sheet = { type:'share' }; render(); break;
+      case 'sheet-share-people': state.ui.sheet = { type:'sharePeople' }; render(); break;
       case 'finish-split': finishSplit(); break;
       case 'open-archived': openArchived(id); break;
       case 'del-archived': deleteArchived(id); break;
