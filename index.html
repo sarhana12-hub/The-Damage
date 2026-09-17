@@ -1795,7 +1795,7 @@
     var out = '<div class="grab"></div>' +
       '<button class="back-btn" data-action="sheet-share">' + ICONS.chevL + ' All the ways</button>' +
       '<h3>Text one person</h3>' +
-      '<p class="sub"><b>Text</b> opens a message already addressed to them, with their items written out. <b>The picture</b> attaches their card instead — iOS asks who to send it to, because a message cannot be both pre-addressed and carry an attachment.</p>';
+      '<p class="sub"><b>Text</b> opens a message already addressed to them with their items written out. <b>The picture</b> opens the same message with just the handle, and puts their card on the clipboard — press and hold in Messages, then Paste.</p>';
 
     out += contacts.map(function(p){
       var who = person(p.id) || {};
@@ -1806,10 +1806,12 @@
         '<div class="grow"><div class="nm">' + esc(p.name) + (m.isPayerRow ? ' <span class="payer-tag">paid</span>' : '') + '</div>' +
         '<div class="sm">' + esc(sub) + '</div></div>' +
         '<div class="amt money">' + fmtMoney(m.amount) + '</div>' +
-        // Always the share sheet: it is the only route that actually attaches
-        // the picture. It cannot be aimed at a person in advance, which is
-        // exactly the trade the Text button makes the other way.
-        '<button class="send-btn alt pic" data-action="share-image" data-id="' + p.id + '" aria-label="Send ' + esc(p.name) + ' a picture of their share">' + ICONS.image + '</button>' +
+        // With a number on file: open the message already addressed, with the
+        // handle as its text and the card waiting on the clipboard. Without
+        // one, the share sheet is the only way to hand over a picture at all.
+        (phone
+          ? '<a class="send-btn alt pic" href="' + esc(smsHref(phone, m.withPicture)) + '" data-action="pic-then-text" data-id="' + p.id + '" aria-label="Text ' + esc(p.name) + ', card ready to paste">' + ICONS.image + '</a>'
+          : '<button class="send-btn alt pic" data-action="share-image" data-id="' + p.id + '" aria-label="Send ' + esc(p.name) + ' a picture of their share">' + ICONS.image + '</button>') +
         (phone
           ? '<a class="send-btn" href="' + esc(smsHref(phone, m.written)) + '">' + ICONS.send + ' Text</a>'
           : '<button class="send-btn alt" data-action="copy-message" data-id="' + p.id + '">' + ICONS.copy + ' Copy</button>') +
@@ -2453,6 +2455,56 @@
 
   function slugify(s){ return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
 
+  /* Copying a card onto the clipboard and opening a pre-addressed message in
+     the same tap is a race, and the first attempt lost it: the card was still
+     being drawn when the sms: link navigated and iOS backgrounded Safari.
+
+     Two changes give the write a chance. The cards are drawn up front, while
+     the sheet is opening, so by the time anything is tapped the image is
+     already a blob in memory. And the write starts on touch-down rather than
+     on the click, buying the whole press-and-release before the navigation. */
+  var picCache = {};
+
+  function warmPictureCache(){
+    picCache = {};
+    var d = D();
+    if (!d) return;
+    var split = computeSplit(d);
+    sendContacts(d, split).forEach(function(p){
+      if (!cleanPhone((person(p.id) || {}).phone)) return;
+      var url = personImageDataUrl(d, split, p.id);
+      if (!url) return;
+      fetch(url).then(function(r){ return r.blob(); })
+        .then(function(b){ picCache[p.id] = b; }, function(){});
+    });
+  }
+
+  function copyCardNow(personId){
+    if (!(navigator.clipboard && window.ClipboardItem)) return false;
+    var blob = picCache[personId];
+    try{
+      // A ready blob means the write is one step; without one we still hand
+      // ClipboardItem a promise, which is the part that previously lost.
+      var payload = blob ? blob : (function(){
+        var d = D();
+        var url = personImageDataUrl(d, computeSplit(d), personId);
+        return url ? fetch(url).then(function(r){ return r.blob(); }) : null;
+      })();
+      if (!payload) return false;
+      navigator.clipboard.write([new ClipboardItem({ 'image/png': payload })])
+        .then(function(){ showToast('Card copied — press and hold, then Paste'); }, function(){});
+      return true;
+    }catch(e){ return false; }
+  }
+
+  // Touch-down, not click: the click is what navigates away.
+  ['pointerdown', 'touchstart'].forEach(function(evt){
+    document.addEventListener(evt, function(e){
+      var el = e.target.closest && e.target.closest('[data-action="pic-then-text"]');
+      if (el) copyCardNow(el.getAttribute('data-id'));
+    }, { passive: true });
+  });
+
   // Hands a PNG to the share sheet, which is the only thing that genuinely
   // attaches it. Where there is no file sharing, fall back to the clipboard
   // and then to simply opening it so it can be saved by hand.
@@ -2666,7 +2718,11 @@
 
       case 'to-result': go('result'); break;
       case 'sheet-share': state.ui.sheet = { type:'share' }; render(); break;
-      case 'sheet-share-people': state.ui.sheet = { type:'sharePeople' }; render(); break;
+      case 'sheet-share-people':
+        warmPictureCache();
+        state.ui.sheet = { type:'sharePeople' };
+        render();
+        break;
       case 'sheet-share-link': {
         // Default to everyone: sending to the whole table is the common case.
         var all = {};
