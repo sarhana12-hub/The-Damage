@@ -304,6 +304,35 @@
     var n = Math.abs(cents);
     return (cents < 0 ? '-' : '') + Math.floor(n / 100) + '.' + String(n % 100).padStart(2, '0');
   }
+  /* Money fields behave like a till. Every digit lands in the cents column and
+     shoves what is already there to the left, so 1-4-0-0 gives 14.00 and the
+     decimal point never has to be typed — which is the fiddly bit on a phone,
+     especially when the field already holds a number you are replacing.
+
+     A minus anywhere is kept, so a discount can still be typed on a keyboard
+     that has one; leading zeros collapse; nine digits is the ceiling. */
+  function centsFromTyping(raw){
+    var s = String(raw == null ? '' : raw);
+    var neg = s.indexOf('-') >= 0;
+    // Every leading zero goes, including a lone one — otherwise backspacing
+    // bottoms out at 0.00 and the field can never be emptied again. Blank and
+    // zero mean the same thing to everything downstream anyway.
+    var digits = s.replace(/\D/g, '').replace(/^0+/, '').slice(0, 9);
+    if (!digits) return null;
+    var cents = parseInt(digits, 10);
+    if (!isFinite(cents)) return null;
+    return neg ? -cents : cents;
+  }
+
+  // Rewrites the field as you type and keeps the caret at the right-hand end,
+  // because the next digit always enters there.
+  function centsFieldInput(el){
+    var cents = centsFromTyping(el.value);
+    el.value = cents == null ? '' : fmtPlain(cents);
+    try{ el.setSelectionRange(el.value.length, el.value.length); }catch(e){}
+    return cents;
+  }
+
   // Accepts "12.34", "$1,234.56", "12", "(3.50)" and "-3.50". Returns null for
   // anything that is not a number, so callers can distinguish 0 from blank.
   function parseMoney(str){
@@ -430,6 +459,15 @@
   // A shared link is read-only and must never overwrite the reader's own
   // dinner, so it lives outside `state` entirely and is never saved.
   var sharedView = null;
+
+  // Typing only committed on blur, so an amount typed and then abandoned by
+  // swiping the app away was lost. This writes shortly after typing stops,
+  // without a storage write on every keystroke.
+  var saveTimer = null;
+  function saveSoon(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 400);
+  }
 
   function save(){
     try{
@@ -1385,7 +1423,7 @@
       out += d.items.map(function(it){
         return '<div class="row-edit">' +
           '<input class="ename" type="text" data-bind="item-name" data-id="' + it.id + '" value="' + esc(it.name) + '" placeholder="Item" aria-label="Item name">' +
-          '<input class="eprice" type="text" inputmode="decimal" data-bind="item-price" data-id="' + it.id + '" value="' + esc(fmtPlain(it.cents)) + '" placeholder="0.00" aria-label="Price">' +
+          '<input class="eprice" type="text" inputmode="numeric" data-bind="item-price" data-id="' + it.id + '" value="' + esc(fmtPlain(it.cents)) + '" placeholder="0.00" aria-label="Price">' +
           '<button class="icon-btn" data-action="del-item" data-id="' + it.id + '" aria-label="Remove ' + esc(it.name) + '">' + ICONS.trash + '</button>' +
           '</div>';
       }).join('');
@@ -1401,14 +1439,14 @@
         ', but the items above add to ' + fmtMoney(split.itemsSum) + '. Check for a missed line — any gap gets shared out evenly.</div>';
     }
     out += '<div class="tot"><span class="lbl">Tax</span>' +
-      '<input class="tot-input" type="text" inputmode="decimal" data-bind="tax" value="' + esc(fmtPlain(d.tax)) + '" placeholder="0.00" aria-label="Tax"></div>';
+      '<input class="tot-input" type="text" inputmode="numeric" data-bind="tax" value="' + esc(fmtPlain(d.tax)) + '" placeholder="0.00" aria-label="Tax"></div>';
 
     out += '<div class="tot"><span class="lbl">Tip</span><span style="display:flex;gap:8px;align-items:center;">' +
       '<span class="seg"><button data-action="tip-mode" data-mode="amt" class="' + (d.tipMode === 'amt' ? 'on' : '') + '">$</button>' +
       '<button data-action="tip-mode" data-mode="pct" class="' + (d.tipMode === 'pct' ? 'on' : '') + '">%</button></span>' +
       (d.tipMode === 'pct'
         ? '<input class="tot-input" style="width:72px" type="text" inputmode="decimal" data-bind="tippct" value="' + esc(String(d.tipPct == null ? '' : d.tipPct)) + '" placeholder="20" aria-label="Tip percent">'
-        : '<input class="tot-input" type="text" inputmode="decimal" data-bind="tip" value="' + esc(fmtPlain(d.tip)) + '" placeholder="0.00" aria-label="Tip">') +
+        : '<input class="tot-input" type="text" inputmode="numeric" data-bind="tip" value="' + esc(fmtPlain(d.tip)) + '" placeholder="0.00" aria-label="Tip">') +
       '</span></div>';
     if (d.tipMode === 'pct'){
       out += '<div class="tot" style="padding-top:0;"><span class="lbl" style="font-size:12.5px;color:var(--ink-dim)">' +
@@ -1416,7 +1454,7 @@
     }
 
     out += '<div class="tot grand"><span class="lbl">Receipt total</span>' +
-      '<input class="tot-input" style="font-size:17px;font-weight:700" type="text" inputmode="decimal" data-bind="total" value="' + esc(fmtPlain(d.total)) + '" placeholder="' + fmtPlain(split.itemsSum + (d.tax || 0) + effectiveTip(d, split.itemsSum)) + '" aria-label="Receipt total"></div>';
+      '<input class="tot-input" style="font-size:17px;font-weight:700" type="text" inputmode="numeric" data-bind="total" value="' + esc(fmtPlain(d.total)) + '" placeholder="' + fmtPlain(split.itemsSum + (d.tax || 0) + effectiveTip(d, split.itemsSum)) + '" aria-label="Receipt total"></div>';
     out += '<div id="tie-slot">' + tieChip(split) + '</div>';
     out += '</div>';
 
@@ -2640,19 +2678,20 @@
       }
       case 'item-price': {
         var ip = d.items.filter(function(x){ return x.id === id; })[0];
-        if (ip) ip.cents = parseMoney(el.value) || 0;
+        var typed = centsFieldInput(el);
+        if (ip) ip.cents = typed || 0;
         refreshTotals();
         break;
       }
-      case 'tax': d.tax = parseMoney(el.value); refreshTotals(); break;
-      case 'tip': d.tip = parseMoney(el.value); refreshTotals(); break;
+      case 'tax': d.tax = centsFieldInput(el); refreshTotals(); break;
+      case 'tip': d.tip = centsFieldInput(el); refreshTotals(); break;
       case 'tippct': {
         var pct = parseFloat(el.value);
         d.tipPct = isFinite(pct) ? pct : 0;
         refreshTotals();
         break;
       }
-      case 'total': d.total = parseMoney(el.value); refreshTotals(); break;
+      case 'total': d.total = centsFieldInput(el); refreshTotals(); break;
       case 'roster-name': {
         var rp = state.roster.filter(function(x){ return x.id === id; })[0];
         if (rp){
@@ -2686,6 +2725,7 @@
         state.settings.geminiModel = '';
         break;
     }
+    saveSoon();
   });
   document.addEventListener('change', function(e){
     if (e.target.id === 'shot-cam' || e.target.id === 'shot-lib'){
