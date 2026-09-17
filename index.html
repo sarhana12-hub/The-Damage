@@ -1718,22 +1718,71 @@
       '<span style="color:var(--ink-dim)">' + ICONS.chev + '</span></button>';
 
     if (groupTo.length > 1){
-      var groupBody = payerTag || (payerP ? 'Settle up with ' + payerP.name : 'Here is what everyone owes');
       var numbers = groupTo.map(function(p){ return cleanPhone((person(p.id) || {}).phone); }).join(',');
       var sep = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent || '') ? '&' : '?';
-      out += '<a class="sheet-row" href="' + esc('sms:' + numbers + sep + 'body=' + encodeURIComponent(groupBody)) + '" data-action="group-card">' + ICONS.users +
-        '<span class="nm">Text all ' + groupTo.length + ' who owe<span class="opt-sub">One message, with a card of everyone&rsquo;s share to paste</span></span></a>';
+      out += '<a class="sheet-row" href="' + esc('sms:' + numbers + sep + 'body=' + encodeURIComponent(groupMessage(d, split))) + '">' + ICONS.users +
+        '<span class="nm">Text all ' + groupTo.length + ' who owe<span class="opt-sub">One message listing what each of them owes</span></span></a>';
     }
 
-    out += '<button class="sheet-row" data-action="copy-link">' + ICONS.link +
-      '<span class="nm">Copy a link to the whole thing<span class="opt-sub">Opens in any browser — no app, no account</span></span></button>';
-
-    if (navigator.share){
-      out += '<button class="sheet-row" data-action="share-link">' + ICONS.share +
-        '<span class="nm">Send that link somewhere<span class="opt-sub">Through the usual share sheet</span></span></button>';
+    if (contacts.length){
+      out += '<button class="sheet-row" data-action="share-group-image">' + ICONS.image +
+        '<span class="nm">Send a card of everyone&rsquo;s shares<span class="opt-sub">A picture — iOS asks who to send it to</span></span></button>';
     }
+
+    if (reachable(d, split).length){
+      out += '<button class="sheet-row" data-action="sheet-share-link">' + ICONS.link +
+        '<span class="nm">Text the link to&hellip;<span class="opt-sub">Pick who gets it, then it opens already addressed</span></span>' +
+        '<span style="color:var(--ink-dim)">' + ICONS.chev + '</span></button>';
+    }
+
+    out += '<button class="sheet-row" data-action="copy-link">' + ICONS.copy +
+      '<span class="nm">Copy the link<span class="opt-sub">Opens in any browser — no app, no account</span></span></button>';
 
     out += '<div class="sheet-actions"><button class="btn btn-secondary" data-action="close-sheet">Close</button></div>';
+    return out;
+  }
+
+  // Who can be texted at all: everyone in the party with a number, minus you.
+  function reachable(d, split){
+    return sendContacts(d, split).filter(function(p){ return cleanPhone((person(p.id) || {}).phone); });
+  }
+
+  function shareLinkSheet(){
+    var d = D();
+    if (!d) return '';
+    var split = computeSplit(d);
+    var list = reachable(d, split);
+    var picked = state.ui.linkTo || {};
+    var chosen = list.filter(function(p){ return picked[p.id]; });
+    var allOn = chosen.length === list.length && list.length > 0;
+
+    var out = '<div class="grab"></div>' +
+      '<button class="back-btn" data-action="sheet-share">' + ICONS.chevL + ' All the ways</button>' +
+      '<h3>Text the link</h3>' +
+      '<p class="sub">Pick who gets it. They open the whole breakdown in a browser — nothing to install.</p>';
+
+    if (!list.length){
+      out += '<div class="empty">Nobody here has a number saved, so there is no one to text. Add numbers in who you dine with, or copy the link instead.</div>';
+    } else {
+      out += '<button class="sheet-row ' + (allOn ? 'on' : '') + '" data-action="link-to-all">' + ICONS.users +
+        '<span class="nm">Everyone</span><span class="tick">' + ICONS.check + '</span></button>';
+      out += list.map(function(p){
+        return '<button class="sheet-row ' + (picked[p.id] ? 'on' : '') + '" data-action="toggle-link-to" data-id="' + p.id + '">' +
+          avatar(p) + '<span class="nm">' + esc(p.name) +
+          '<span class="opt-sub">' + esc(prettyPhone(cleanPhone((person(p.id) || {}).phone))) + '</span></span>' +
+          '<span class="tick">' + ICONS.check + '</span></button>';
+      }).join('');
+    }
+
+    var numbers = chosen.map(function(p){ return cleanPhone((person(p.id) || {}).phone); }).join(',');
+    var sep = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent || '') ? '&' : '?';
+    out += '<div class="sheet-actions">' +
+      '<button class="btn btn-secondary" data-action="close-sheet">Close</button>' +
+      (chosen.length
+        ? '<a class="btn btn-primary" href="' + esc('sms:' + numbers + sep + 'body=' + encodeURIComponent(linkMessage(d))) + '">' +
+            ICONS.send + ' Text ' + chosen.length + (chosen.length === 1 ? ' person' : ' people') + '</a>'
+        : '<button class="btn btn-primary" disabled>Pick someone</button>') +
+      '</div>';
     return out;
   }
 
@@ -1746,7 +1795,7 @@
     var out = '<div class="grab"></div>' +
       '<button class="back-btn" data-action="sheet-share">' + ICONS.chevL + ' All the ways</button>' +
       '<h3>Text one person</h3>' +
-      '<p class="sub"><b>Text</b> writes their items out in full. <b>The picture</b> opens the same message with their card ready to paste, and sends just the handle as text.</p>';
+      '<p class="sub"><b>Text</b> opens a message already addressed to them, with their items written out. <b>The picture</b> attaches their card instead — iOS asks who to send it to, because a message cannot be both pre-addressed and carry an attachment.</p>';
 
     out += contacts.map(function(p){
       var who = person(p.id) || {};
@@ -1757,9 +1806,10 @@
         '<div class="grow"><div class="nm">' + esc(p.name) + (m.isPayerRow ? ' <span class="payer-tag">paid</span>' : '') + '</div>' +
         '<div class="sm">' + esc(sub) + '</div></div>' +
         '<div class="amt money">' + fmtMoney(m.amount) + '</div>' +
-        (phone
-          ? '<a class="send-btn alt pic" href="' + esc(smsHref(phone, m.withPicture)) + '" data-action="pic-then-text" data-id="' + p.id + '" aria-label="Text ' + esc(p.name) + ' with their picture on the clipboard">' + ICONS.image + '</a>'
-          : '<button class="send-btn alt pic" data-action="share-image" data-id="' + p.id + '" aria-label="Send ' + esc(p.name) + ' a picture of their share">' + ICONS.image + '</button>') +
+        // Always the share sheet: it is the only route that actually attaches
+        // the picture. It cannot be aimed at a person in advance, which is
+        // exactly the trade the Text button makes the other way.
+        '<button class="send-btn alt pic" data-action="share-image" data-id="' + p.id + '" aria-label="Send ' + esc(p.name) + ' a picture of their share">' + ICONS.image + '</button>' +
         (phone
           ? '<a class="send-btn" href="' + esc(smsHref(phone, m.written)) + '">' + ICONS.send + ' Text</a>'
           : '<button class="send-btn alt" data-action="copy-message" data-id="' + p.id + '">' + ICONS.copy + ' Copy</button>') +
@@ -1909,6 +1959,7 @@
 
     if (s.type === 'share') inner = shareMenuSheet();
     if (s.type === 'sharePeople') inner = sharePeopleSheet();
+    if (s.type === 'shareLink') inner = shareLinkSheet();
 
     if (s.type === 'addPerson'){
       inner = '<div class="grab"></div>' +
@@ -2377,26 +2428,6 @@
     return c.toDataURL('image/png');
   }
 
-  // Same trick as the per-person button: start the clipboard write inside the
-  // click and let the link's own navigation open Messages.
-  function copyGroupCard(){
-    var d = D();
-    var dataUrl = groupCardDataUrl(d, computeSplit(d));
-    if (!dataUrl) return;
-    if (!(navigator.clipboard && window.ClipboardItem)){
-      showToast('Opening a group text — the picture needs a newer iOS');
-      return;
-    }
-    try{
-      navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': fetch(dataUrl).then(function(r){ return r.blob(); }) })
-      ]).then(function(){ showToast('Card copied — paste it into the message'); },
-              function(){ showToast('Could not copy the card — the text is still ready'); });
-    }catch(e){
-      showToast('Could not copy the card — the text is still ready');
-    }
-  }
-
   function dataUrlToFile(dataUrl, name){
     var bin = atob(dataUrl.split(',')[1]);
     var arr = new Uint8Array(bin.length);
@@ -2404,52 +2435,34 @@
     return new File([arr], name, { type: 'image/png' });
   }
 
-  // There is no way to open a message to a chosen person with an image already
-  // attached: sms: addresses a recipient but carries only text, and the Web
-  // Share API carries files but has no recipient field by design. So when a
-  // number is on file we do the next best thing — put the picture on the
-  // clipboard and let the sms: link open Messages already addressed, with the
-  // text in place and the image one paste away. The clipboard write is started
-  // inside the click and the link's own navigation is left to proceed, because
-  // navigating first would tear down the write.
-  function copyImageThenText(personId){
-    var d = D();
-    var dataUrl = personImageDataUrl(d, computeSplit(d), personId);
-    if (!dataUrl) return;
-    if (!(navigator.clipboard && window.ClipboardItem)){
-      showToast('Opening a text — tap the picture button for the image');
-      return;
-    }
-    try{
-      // ClipboardItem accepts a promise for the blob, which keeps the whole
-      // thing inside the gesture that Safari requires.
-      navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': fetch(dataUrl).then(function(r){ return r.blob(); }) })
-      ]).then(function(){
-        showToast('Picture copied — paste it into the message');
-      }, function(){
-        showToast('Could not copy the picture — the text is still ready');
-      });
-    }catch(e){
-      showToast('Could not copy the picture — the text is still ready');
-    }
+  // One message to everyone who owes. It has to carry its content as text: a
+  // pre-addressed message cannot take an attachment, and there is no way to
+  // aim the share sheet at a particular group.
+  function groupMessage(d, split){
+    var payer = (d.people || []).filter(function(x){ return x.id === d.payerId; })[0];
+    var tag = handleFor(payer);
+    var owing = split.people
+      .filter(function(p){ return p.id !== d.payerId; })
+      .sort(function(a, b){ return b.total - a.total; });
+    var out = [dinnerHead(d), ''];
+    owing.forEach(function(p){ out.push(p.name + '  ' + fmtMoney(p.total)); });
+    if (tag){ out.push(''); out.push('Venmo ' + tag); }
+    else if (payer){ out.push(''); out.push('Settle up with ' + payer.name); }
+    return out.join('\n');
   }
 
-  function shareSplitImage(personId){
-    var d = D();
-    var split = computeSplit(d);
-    var dataUrl = personImageDataUrl(d, split, personId);
+  function slugify(s){ return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+
+  // Hands a PNG to the share sheet, which is the only thing that genuinely
+  // attaches it. Where there is no file sharing, fall back to the clipboard
+  // and then to simply opening it so it can be saved by hand.
+  function offerImage(dataUrl, name){
     if (!dataUrl) return;
-    var who = (split.people.filter(function(x){ return x.id === personId; })[0] || {}).name || 'share';
-    var slug = function(s){ return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
-    var name = (slug(who) || 'share') + '-' + (slug(d.place) || 'the-damage') + '.png';
     var file = dataUrlToFile(dataUrl, name);
     if (navigator.canShare && navigator.canShare({ files: [file] })){
       navigator.share({ files: [file] }).catch(function(){});
       return;
     }
-    // No file sharing here: put it on the clipboard, and failing that open it
-    // so it can be saved by hand.
     if (navigator.clipboard && window.ClipboardItem){
       fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(b){
         return navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]);
@@ -2457,6 +2470,28 @@
       return;
     }
     window.open(dataUrl, '_blank');
+  }
+
+  function shareSplitImage(personId){
+    var d = D(), split = computeSplit(d);
+    var who = (split.people.filter(function(x){ return x.id === personId; })[0] || {}).name || 'share';
+    offerImage(personImageDataUrl(d, split, personId),
+      (slugify(who) || 'share') + '-' + (slugify(d.place) || 'the-damage') + '.png');
+  }
+
+  function shareGroupImage(){
+    var d = D();
+    offerImage(groupCardDataUrl(d, computeSplit(d)), (slugify(d.place) || 'the-damage') + '-everyone.png');
+  }
+
+  // The link, with enough around it to make sense on arrival.
+  function linkMessage(d){
+    var payer = (d.people || []).filter(function(x){ return x.id === d.payerId; })[0];
+    var tag = handleFor(payer);
+    var out = [dinnerHead(d), '', 'The full breakdown: ' + encodeShare(d)];
+    if (tag){ out.push(''); out.push('Venmo ' + tag); }
+    else if (payer){ out.push(''); out.push('Settle up with ' + payer.name); }
+    return out.join('\n');
   }
 
   function shareResult(){
@@ -2632,6 +2667,30 @@
       case 'to-result': go('result'); break;
       case 'sheet-share': state.ui.sheet = { type:'share' }; render(); break;
       case 'sheet-share-people': state.ui.sheet = { type:'sharePeople' }; render(); break;
+      case 'sheet-share-link': {
+        // Default to everyone: sending to the whole table is the common case.
+        var all = {};
+        reachable(d, computeSplit(d)).forEach(function(p){ all[p.id] = true; });
+        state.ui.linkTo = all;
+        state.ui.sheet = { type:'shareLink' };
+        render();
+        break;
+      }
+      case 'toggle-link-to':
+        state.ui.linkTo = state.ui.linkTo || {};
+        state.ui.linkTo[id] = !state.ui.linkTo[id];
+        render();
+        break;
+      case 'link-to-all': {
+        var reach = reachable(d, computeSplit(d));
+        var on = reach.every(function(p){ return (state.ui.linkTo || {})[p.id]; });
+        var next = {};
+        if (!on) reach.forEach(function(p){ next[p.id] = true; });
+        state.ui.linkTo = next;
+        render();
+        break;
+      }
+      case 'share-group-image': shareGroupImage(); break;
       case 'finish-split': finishSplit(); break;
       case 'open-archived': openArchived(id); break;
       case 'del-archived': deleteArchived(id); break;
@@ -2661,8 +2720,6 @@
       }
       case 'share-link': shareResult(); break;
       case 'share-image': shareSplitImage(id); break;
-      case 'pic-then-text': copyImageThenText(id); break;
-      case 'group-card': copyGroupCard(); break;   // no preventDefault: the link still opens Messages   // no preventDefault: the link still opens Messages
 
       case 'leave-shared':
         sharedView = null;
